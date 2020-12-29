@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import numpy as np
 import torch
 import string
@@ -18,8 +17,7 @@ def padding(arr, pad_token, dtype=torch.long):
 def bert_encode(model, x, attention_mask):
     model.eval()
     with torch.no_grad():
-        _, _, x_encoded_layers, _ = model(input_ids = x, token_type_ids = None, attention_mask = attention_mask)
-    return x_encoded_layers
+        return model(input_ids=x, attention_mask=attention_mask)["hidden_states"]
 
 def collate_idf(arr, tokenize, numericalize, idf_dict, device):
     tokens = [["[CLS]"]+tokenize(a)+["[SEP]"] for a in arr]

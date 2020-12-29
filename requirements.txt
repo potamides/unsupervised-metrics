@@ -5,7 +5,6 @@ docopt==0.6.2
 filelock==3.0.12
 idna==2.10
 joblib==1.0.0
-mosestokenizer==1.1.0
 numpy==1.19.4
 openfile==0.0.7
 packaging==20.8
