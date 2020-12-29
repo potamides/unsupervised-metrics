@@ -2,20 +2,20 @@
 from aligner import XMoverAligner
 from csv import reader
 from itertools import islice
-from os.path import isfile
+from os.path import isfile, join
 from gzip import open as gopen
 from urllib.request import urlretrieve
 
 filename = 'news-commentary-v15.de-en.tsv.gz'
 url = f'http://data.statmt.org/news-commentary/v15/training/{filename}'
+path = f'datasets/{filename}'
 samples = 3000
 
-if not isfile(filename):
-    urlretrieve(url, filename)
-
+if not isfile(path):
+    urlretrieve(url, path)
 
 source_data, target_data = list(), list()
-with gopen(filename, 'rt') as tsvfile:
+with gopen(path, 'rt') as tsvfile:
     for src, tgt in islice(reader(tsvfile, delimiter="\t"), samples):
         source_data.append(src)
         target_data.append(tgt)
