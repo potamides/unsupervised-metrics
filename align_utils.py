@@ -83,67 +83,69 @@ def load_ngram(ids, embedding, idf, n, o, device):
     new_a = torch.stack(new_a, 0).to(device)
     return new_a, new_idf
 
-def compute_scores_for_batch(model, tokenizer, batch_src, batch_tgt, n_gram,  device):
+
+def embedd_batch(model, tokenizer, batch, n_gram, device):
     idf_dict_src = defaultdict(lambda: 1.)
-    idf_dict_tgt = defaultdict(lambda: 1.)
-    src_embedding, _, _, src_idf, src_tokens = get_bert_embedding(batch_src, model, tokenizer, idf_dict_src, device)
-    tgt_embedding, _, _, tgt_idf, tgt_tokens = get_bert_embedding(batch_tgt, model, tokenizer, idf_dict_tgt, device)
-    src_embedding = src_embedding[-1]
-    tgt_embedding = tgt_embedding[-1]
+    embedding, _, _, idf, tokens = get_bert_embedding(batch, model, tokenizer, idf_dict_src, device)
+    embedding = embedding[-1]
 
-    src_embedding_ngrams, src_idf_ngrams = list(), list()
-    for i in range(len(batch_src)):
-        src_ids = [k for k, w in enumerate(src_tokens[i]) if w not in set(string.punctuation) and '##' not in w]
-        src_embedding_ngram, src_idf_ngram = load_ngram(src_ids, src_embedding[i], src_idf[i], n_gram, 1, device)
-        src_embedding_ngrams.append(src_embedding_ngram)
-        src_idf_ngrams.append(src_idf_ngram)
+    embedding_ngrams, idf_ngrams = list(), list()
+    for i in range(len(batch)):
+        ids = [k for k, w in enumerate(tokens[i]) if w not in set(string.punctuation) and '##' not in w]
+        embedding_ngram, idf_ngram = load_ngram(ids, embedding[i], idf[i], n_gram, 1, device)
+        embedding_ngrams.append(embedding_ngram)
+        idf_ngrams.append(idf_ngram)
 
-    tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
-    for j in range(len(batch_tgt)):
-        tgt_ids = [k for k, w in enumerate(tgt_tokens[j]) if w not in set(string.punctuation) and '##' not in w]
-        tgt_embedding_ngram, tgt_idf_ngram = load_ngram(tgt_ids, tgt_embedding[j], tgt_idf[j], n_gram, 1, device)
-        tgt_embedding_ngrams.append(tgt_embedding_ngram)
-        tgt_idf_ngrams.append(tgt_idf_ngram)
+    return embedding_ngrams, idf_ngrams
 
-    score_matrix = torch.zeros(len(batch_src), len(batch_tgt))
-    for i in range(len(batch_src)):
-        for j in range(len(batch_tgt)):
-            embeddings = torch.cat([src_embedding_ngrams[i], tgt_embedding_ngrams[j]], 0)
-            embeddings.div_(torch.norm(embeddings, dim=-1).unsqueeze(-1) + 1e-30)
-            distance_matrix = pairwise_distances(embeddings, embeddings)
+def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams):
+    embeddings = torch.cat([src_embedding_ngrams, tgt_embedding_ngrams], 0)
+    embeddings.div_(torch.norm(embeddings, dim=-1).unsqueeze(-1) + 1e-30)
+    distance_matrix = pairwise_distances(embeddings, embeddings)
 
-            c1 = np.zeros(len(src_idf_ngrams[i]) + len(tgt_idf_ngrams[j]))
-            c2 = np.zeros_like(c1)
+    c1 = np.zeros(len(src_idf_ngrams) + len(tgt_idf_ngrams))
+    c2 = np.zeros_like(c1)
 
-            c1[:len(src_idf_ngrams[i])] = src_idf_ngrams[i]
-            c2[-len(tgt_idf_ngrams[j]):] = tgt_idf_ngrams[j]
+    c1[:len(src_idf_ngrams)] = src_idf_ngrams
+    c2[-len(tgt_idf_ngrams):] = tgt_idf_ngrams
 
-            score = 1 - emd(_safe_divide(c1, np.sum(c1)),
-                        _safe_divide(c2, np.sum(c2)),
-                        distance_matrix.double().cpu().numpy())
+    score = 1 - emd(_safe_divide(c1, np.sum(c1)),
+                _safe_divide(c2, np.sum(c2)),
+                distance_matrix.double().cpu().numpy())
 
-            score_matrix[i][j] = score
-
-    return score_matrix
+    return score
 
 def word_mover_align(model, tokenizer, source_data, target_data, n_gram, batch_size, device):
 
-    pairs = []
+    pairs = list()
+    src_embedding_ngrams, src_idf_ngrams = list(), list()
     for src_batch_start in range(0, len(source_data), batch_size):
         batch_src = source_data[src_batch_start:src_batch_start+batch_size]
-        best_matches = list()
-        for tgt_batch_start in range(0, len(target_data), batch_size):
-            batch_tgt = target_data[tgt_batch_start:tgt_batch_start+batch_size]
+        batch_src_embedding_ngrams, batch_src_idf_ngrams = embedd_batch(model, tokenizer, batch_src, n_gram, device)
+        src_embedding_ngrams.extend(batch_src_embedding_ngrams)
+        src_idf_ngrams.extend(batch_src_idf_ngrams)
 
-            score_matrix = compute_scores_for_batch(model, tokenizer, batch_src, batch_tgt, n_gram, device)
-            for i in range(len(batch_src)):
-                score, index = torch.max(score_matrix[i], 0)
-                try:
-                    if score > best_matches[i][0]:
-                        best_matches[i] = (score, tgt_batch_start + index)
-                except IndexError:
-                        best_matches.append((score, tgt_batch_start + index))
+    tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
+    for tgt_batch_start in range(0, len(target_data), batch_size):
+        batch_tgt = target_data[tgt_batch_start:tgt_batch_start+batch_size]
+        batch_tgt_embedding_ngrams, batch_tgt_idf_ngrams = embedd_batch(model, tokenizer, batch_tgt, n_gram, device)
+        tgt_embedding_ngrams.extend(batch_tgt_embedding_ngrams)
+        tgt_idf_ngrams.extend(batch_tgt_idf_ngrams)
 
-        pairs.extend([(batch_src[src], target_data[tgt]) for src, (_, tgt) in enumerate(best_matches)])
+    for src_index in range(len(source_data)):
+        best_score = 0
+        best_tgt_index = -1
+        for tgt_index in range(len(target_data)):
+            batch_src_embedding_ngrams = src_embedding_ngrams[src_index]
+            batch_src_idf_ngrams = src_idf_ngrams[src_index]
+            batch_tgt_embedding_ngrams = tgt_embedding_ngrams[tgt_index]
+            batch_tgt_idf_ngrams = tgt_idf_ngrams[tgt_index]
+            score = compute_score(batch_src_embedding_ngrams, batch_src_idf_ngrams,
+                    batch_tgt_embedding_ngrams, batch_tgt_idf_ngrams)
+            if score > best_score:
+                best_score = score
+                best_tgt_index = tgt_index
+
+        pairs.append((source_data[src_index], target_data[best_tgt_index]))
 
     return pairs
