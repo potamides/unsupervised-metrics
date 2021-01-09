@@ -1,5 +1,5 @@
 from transformers import BertModel, BertTokenizer, BertConfig
-from align_utils import word_mover_align
+from word_mover_utils import word_mover_align
 from torch.cuda import is_available as cuda_is_available
 from random import sample
 

@@ -1,0 +1,3 @@
+[submodule "LASER"]
+	path = LASER
+	url = https://github.com/facebookresearch/LASER.git
