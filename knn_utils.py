@@ -7,15 +7,9 @@ from LASER.source.lib.text_processing import Token, BPEfastApply
 from LASER.source.embed import SentenceEncoder, EncodeFile
 
 environ["LASER"] = (Path(__file__).parent / "LASER").resolve()
+dim = 1024
 
-def load_batch(emb_file, dim):
-    embeddings = np.fromfile(emb_file, dtype=np.float32)
-    num_rows = int(embeddings.shape[0] / dim)
-    embeddings = embeddings.reshape((num_rows, dim))
-    faiss.normalize_L2(embeddings)
-    return embeddings
-
-def embed_batch(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang="en"):
+def embed(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang="en"):
     model_dir = path.join(environ.get("LASER"), "models")
     encoder_path = path.join(model_dir, "bilstm.93langs.2018-12-26.pt")
     bpe_codes_path = path.join(model_dir, "93langs.fcodes")
@@ -52,24 +46,24 @@ def embed_batch(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang
                verbose=True,
                over_write=False,
                buffer_size=10000)
-    dim = 1024
     embedding = np.fromfile(bpe_oname, dtype=np.float32, count=-1)
     embedding.resize(embedding.shape[0] // dim, dim)
     return embedding
 
-def knn_sharded(x_batches_f, y_batches_f, dim, k, device):
+def knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_size, device):
     sims = []
     inds = []
     xfrom = 0
     xto = 0
-    for x_batch_f in x_batches_f:
+    source_embeddings = embed(source_data, lang=source_lang)
+    target_embeddings = embed(target_data, lang=target_lang)
+
+    for x_batch in np.array_split(source_embeddings, np.ceil(len(source_embeddings) / batch_size)):
         yfrom = 0
         yto = 0
-        x_batch = load_batch(x_batch_f, dim)
         xto = xfrom + x_batch.shape[0]
         bsims, binds = [], []
-        for y_batch_f in y_batches_f:
-            y_batch = load_batch(y_batch_f, dim)
+        for y_batch in np.array_split(target_embeddings, np.ceil(len(target_embeddings) / batch_size)):
             neighbor_size = min(k, y_batch.shape[0])
             yto = yfrom + y_batch.shape[0]
             logging.info("{}-{}  ->  {}-{}".format(xfrom, xto, yfrom, yto))
@@ -100,3 +94,7 @@ def knn_sharded(x_batches_f, y_batches_f, dim, k, device):
     sim = np.concatenate(sims, axis=0)
     ind = np.concatenate(inds, axis=0)
     return sim, ind
+
+def find_neares_neighbors(source_data, target_data, k, source_lang, target_lang, batch_size, device):
+    _, indeces = knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_size, device)
+    return indeces

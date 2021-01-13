@@ -8,16 +8,15 @@ from urllib.request import urlretrieve
 from pathlib import Path
 import logging
 
+logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 
 filename = 'news-commentary-v15.de-en.tsv.gz'
 url = f'http://data.statmt.org/news-commentary/v15/training/{filename}'
 path = (Path(__file__).parent / f'data/{filename}').resolve()
 samples = 3000
 
-logging.basicConfig(level=logging.INFO)
-
 if not isfile(path):
-    logging.info(f"Downloading {filename} dataset...")
+    logging.info(f"Downloading {filename} dataset.")
     urlretrieve(url, path)
 
 source_data, target_data = list(), list()
