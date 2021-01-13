@@ -11,7 +11,7 @@ from LASER.source.embed import SentenceEncoder, EncodeFile
 
 dim = 1024
 
-def embed(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang="en"):
+def embed(content, lang, device, tmpdir=(Path(__file__).parent / "data").resolve()):
     model_dir = path.join(environ.get("LASER"), "models")
     encoder_path = path.join(model_dir, "bilstm.93langs.2018-12-26.pt")
     bpe_codes_path = path.join(model_dir, "93langs.fcodes")
@@ -20,7 +20,7 @@ def embed(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang="en")
                               max_sentences=None,
                               max_tokens=12000,
                               sort_kind='mergesort',
-                              cpu=True)
+                              cpu=device=='cpu')
     ifname = path.join(tmpdir, "content.txt")
     tok_fname = path.join(tmpdir, "tok")
     bpe_fname = path.join(tmpdir, 'bpe')
@@ -59,9 +59,9 @@ def knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_siz
     xfrom = 0
     xto = 0
     logging.info("Embedding source sentences with LASER.")
-    source_embeddings = embed(source_data, lang=source_lang)
+    source_embeddings = embed(source_data, source_lang, device)
     logging.info("Embedding target sentences with LASER.")
-    target_embeddings = embed(target_data, lang=target_lang)
+    target_embeddings = embed(target_data, target_lang, device)
 
     logging.info("Finding the {} nearest neighbors of {} {} sentences in {} {} sentences.".format(
         k, len(source_data), source_lang, len(target_data), target_lang))
