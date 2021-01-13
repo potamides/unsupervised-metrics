@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import string
+import logging
 from pyemd import emd
 from collections import defaultdict
 
@@ -115,9 +116,8 @@ def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tg
 
     return score
 
-def word_mover_align(model, tokenizer, source_data, target_data, n_gram, batch_size, device):
-
-    pairs = list()
+def word_mover_align(model, tokenizer, source_data, target_data, n_gram, batch_size, device, candidates=None):
+    logging.info("Embedding source sentences with mBERT.")
     src_embedding_ngrams, src_idf_ngrams = list(), list()
     for src_batch_start in range(0, len(source_data), batch_size):
         batch_src = source_data[src_batch_start:src_batch_start+batch_size]
@@ -125,6 +125,7 @@ def word_mover_align(model, tokenizer, source_data, target_data, n_gram, batch_s
         src_embedding_ngrams.extend(batch_src_embedding_ngrams)
         src_idf_ngrams.extend(batch_src_idf_ngrams)
 
+    logging.info("Embedding target sentences with mBERT.")
     tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
     for tgt_batch_start in range(0, len(target_data), batch_size):
         batch_tgt = target_data[tgt_batch_start:tgt_batch_start+batch_size]
@@ -132,10 +133,13 @@ def word_mover_align(model, tokenizer, source_data, target_data, n_gram, batch_s
         tgt_embedding_ngrams.extend(batch_tgt_embedding_ngrams)
         tgt_idf_ngrams.extend(batch_tgt_idf_ngrams)
 
+    logging.info("Computing word mover scores.")
+    pairs = list()
     for src_index in range(len(source_data)):
         best_score = 0
         best_tgt_index = -1
-        for tgt_index in range(len(target_data)):
+        # use only the nearest neighbors, when they are provided
+        for tgt_index in range(len(target_data)) if candidates is None else candidates[src_index]:
             batch_src_embedding_ngrams = src_embedding_ngrams[src_index]
             batch_src_idf_ngrams = src_idf_ngrams[src_index]
             batch_tgt_embedding_ngrams = tgt_embedding_ngrams[tgt_index]

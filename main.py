@@ -10,7 +10,8 @@ import logging
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 
-filename = 'news-commentary-v15.de-en.tsv.gz'
+source_lang, target_lang = "de", "en"
+filename = f'news-commentary-v15.{source_lang}-{target_lang}.tsv.gz'
 url = f'http://data.statmt.org/news-commentary/v15/training/{filename}'
 path = (Path(__file__).parent / f'data/{filename}').resolve()
 samples = 3000
@@ -25,4 +26,4 @@ with gopen(path, 'rt') as tsvfile:
         source_data.append(src)
         target_data.append(tgt)
   
-logging.info(f"Accuracy: {XMoverAligner().accuracy_on_data(source_data, target_data)}")
+logging.info(f"Accuracy: {XMoverAligner().accuracy_on_data(source_data, target_data, source_lang, target_lang)}")

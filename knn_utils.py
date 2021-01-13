@@ -1,51 +1,54 @@
 import faiss
 import logging
 import numpy as np
-from os import environ, path
+from os import environ, path, remove
 from pathlib import Path
+from contextlib import suppress
+# required for LASER to work
+environ["LASER"] = str((Path(__file__).parent / "LASER").resolve())
 from LASER.source.lib.text_processing import Token, BPEfastApply
 from LASER.source.embed import SentenceEncoder, EncodeFile
 
-environ["LASER"] = (Path(__file__).parent / "LASER").resolve()
 dim = 1024
 
 def embed(content, tmpdir=(Path(__file__).parent / "data").resolve(), lang="en"):
     model_dir = path.join(environ.get("LASER"), "models")
     encoder_path = path.join(model_dir, "bilstm.93langs.2018-12-26.pt")
     bpe_codes_path = path.join(model_dir, "93langs.fcodes")
-    print(f' - Encoder: loading {encoder_path}')
+    logging.info(f' - Encoder: loading {encoder_path}')
     encoder = SentenceEncoder(encoder_path,
                               max_sentences=None,
                               max_tokens=12000,
                               sort_kind='mergesort',
                               cpu=True)
     ifname = path.join(tmpdir, "content.txt")
+    tok_fname = path.join(tmpdir, "tok")
     bpe_fname = path.join(tmpdir, 'bpe')
     bpe_oname = path.join(tmpdir, 'out.raw')
-    with ifname.open("w") as f:
-        f.write(content)
+
+    with open(ifname, "wb") as f:
+        f.write('\n'.join(content).encode())
+    with suppress(FileNotFoundError):
+        remove(tok_fname)
+        remove(bpe_fname)
+        remove(bpe_oname)
     if lang != '--':
-        tok_fname = path.join(tmpdir, "tok")
         Token(ifname,
               tok_fname,
               lang=lang,
               romanize=True if lang == 'el' else False,
               lower_case=True,
-              gzip=False,
-              verbose=True,
-              over_write=False)
+              gzip=False)
         ifname = tok_fname
     BPEfastApply(ifname,
                  bpe_fname,
-                 bpe_codes_path,
-                 verbose=True, over_write=False)
+                 bpe_codes_path)
     ifname = bpe_fname
     EncodeFile(encoder,
                ifname,
                bpe_oname,
-               verbose=True,
-               over_write=False,
                buffer_size=10000)
+    # TODO: implement lazy loading for larger datasets
     embedding = np.fromfile(bpe_oname, dtype=np.float32, count=-1)
     embedding.resize(embedding.shape[0] // dim, dim)
     return embedding
@@ -55,9 +58,13 @@ def knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_siz
     inds = []
     xfrom = 0
     xto = 0
+    logging.info("Embedding source sentences with LASER.")
     source_embeddings = embed(source_data, lang=source_lang)
+    logging.info("Embedding target sentences with LASER.")
     target_embeddings = embed(target_data, lang=target_lang)
 
+    logging.info("Finding the {} nearest neighbors of {} {} sentences in {} {} sentences.".format(
+        k, len(source_data), source_lang, len(target_data), target_lang))
     for x_batch in np.array_split(source_embeddings, np.ceil(len(source_embeddings) / batch_size)):
         yfrom = 0
         yto = 0
@@ -66,7 +73,7 @@ def knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_siz
         for y_batch in np.array_split(target_embeddings, np.ceil(len(target_embeddings) / batch_size)):
             neighbor_size = min(k, y_batch.shape[0])
             yto = yfrom + y_batch.shape[0]
-            logging.info("{}-{}  ->  {}-{}".format(xfrom, xto, yfrom, yto))
+            logging.info(f"Comparing: {xfrom}-{xto}  ->  {yfrom}-{yto}")
             idx = faiss.IndexFlatIP(dim)
             if device != 'cpu':
                 idx = faiss.index_cpu_to_all_gpus(idx)
@@ -95,6 +102,6 @@ def knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_siz
     ind = np.concatenate(inds, axis=0)
     return sim, ind
 
-def find_neares_neighbors(source_data, target_data, k, source_lang, target_lang, batch_size, device):
+def find_nearest_neighbors(source_data, target_data, source_lang, target_lang, k, batch_size, device):
     _, indeces = knn_sharded(source_data, target_data, source_lang, target_lang, k, batch_size, device)
     return indeces
