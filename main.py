@@ -26,4 +26,4 @@ with gopen(path, 'rt') as tsvfile:
         source_data.append(src)
         target_data.append(tgt)
   
-logging.info(f"Accuracy: {XMoverAligner().accuracy_on_data(source_data, target_data, source_lang, target_lang)}")
+logging.info(f"Accuracy: {XMoverAligner().accuracy_on_sents(source_data, target_data)}")
