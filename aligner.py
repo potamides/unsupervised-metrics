@@ -41,14 +41,10 @@ class XMoverAligner:
         candidates = None
         if self.use_knn:
             logging.info("Finding nearest neighbors with KNN algorithm.")
-            source_mask = source_data[3].unsqueeze(-1)
-            source_sent_embeddings = torch.sum(source_data[0] * source_mask, 1) / torch.sum(source_mask, 1)
-            target_mask = target_data[3].unsqueeze(-1)
-            target_sent_embeddings = torch.sum(target_data[0] * target_mask, 1) / torch.sum(target_mask, 1)
-            candidates = find_nearest_neighbors(source_sent_embeddings, target_sent_embeddings, self.k,
+            candidates = find_nearest_neighbors(source_data[0].mean(1), target_data[0].mean(1), self.k,
                     self.knn_batch_size, self.device)
         logging.info("Computing word mover scores.")
-        return word_mover_align(source_data[:3], target_data[:3], self.n_gram, self.device, candidates) 
+        return word_mover_align(source_data, target_data, self.n_gram, self.device, candidates) 
 
     def accuracy_on_sents(self, ref_source_sents, ref_target_sents):
         shuffled_target_sents = sample(ref_target_sents, len(ref_target_sents))

@@ -36,4 +36,4 @@ def embed(all_sens, bs, model, tokenizer, device):
     with torch.no_grad():
         for i in range(0, len(padded_sens), bs):
             all_embeddings.append(model(padded_sens[i:i+bs], mask[i:i+bs])["last_hidden_state"])
-    return torch.cat(all_embeddings), padded_idf, tokens, mask
+    return torch.cat(all_embeddings), padded_idf, tokens
