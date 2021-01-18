@@ -14,7 +14,7 @@ class XMoverAligner:
         model_name='bert-base-multilingual-cased',
         do_lower_case=False,
         device="cuda" if cuda_is_available() else "cpu",
-        k = 5,
+        k = 20,
         n_gram = 1,
         embed_batch_size = 128,
         knn_batch_size = 1000000,
@@ -41,10 +41,12 @@ class XMoverAligner:
         candidates = None
         if self.use_knn:
             logging.info("Finding nearest neighbors with KNN algorithm.")
-            candidates = find_nearest_neighbors(source_data[0].mean(1), target_data[0].mean(1), self.k,
+            source_sent_embeddings = torch.sum(source_data[0] * source_data[3], 1) / torch.sum(source_data[3], 1)
+            target_sent_embeddings = torch.sum(target_data[0] * target_data[3], 1) / torch.sum(target_data[3], 1)
+            candidates = find_nearest_neighbors(source_sent_embeddings, target_sent_embeddings, self.k,
                     self.knn_batch_size, self.device)
         logging.info("Computing word mover scores.")
-        return word_mover_align(source_data, target_data, self.n_gram, self.device, candidates) 
+        return word_mover_align(source_data[:3], target_data[:3], self.n_gram, self.device, candidates) 
 
     def accuracy_on_sents(self, ref_source_sents, ref_target_sents):
         shuffled_target_sents = sample(ref_target_sents, len(ref_target_sents))
