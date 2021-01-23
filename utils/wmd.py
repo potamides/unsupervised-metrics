@@ -65,7 +65,7 @@ def word_mover_align(source_data, target_data, n_gram, device, candidates=None):
         tgt_embedding_ngrams.append(embedding_ngrams)
         tgt_idf_ngrams.append(idf_ngrams)
 
-    pairs = list()
+    pairs, scores = list(), list()
     for src_index in range(len(src_embedding_ngrams)):
         best_score = 0
         best_tgt_index = -1
@@ -82,5 +82,6 @@ def word_mover_align(source_data, target_data, n_gram, device, candidates=None):
                 best_tgt_index = tgt_index
 
         pairs.append((src_index, best_tgt_index))
+        scores.append(best_score)
 
-    return pairs
+    return pairs, scores
