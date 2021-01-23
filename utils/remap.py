@@ -141,15 +141,15 @@ def word_align(sent_pairs, tokenizer, size=30000, max_seq_length=100):
     sym_aligned = [[tuple(map(int, pair.split(b"-"))) for pair in pairs.split()] for pairs in sym_aligned.splitlines()]
     return tokenized_pairs, sym_aligned
 
-def clp(x, z):
+def clp(x, z, device):
     u, _, vt = np.linalg.svd(z.T.dot(x))
     w = vt.T.dot(u.T)
-    return torch.Tensor(w)
+    return torch.Tensor(w).to(device)
 
-def umd(x, z):
+def umd(x, z, device):
     *_, v = np.linalg.svd(x - z)  
     v_b = v[0]
-    return torch.Tensor(v_b)
+    return torch.Tensor(v_b).to(device)
 
 def remap(sent_pairs, model, tokenizer, batch_size, device):
     tokenized_pairs, align_pairs = word_align(sent_pairs, tokenizer)

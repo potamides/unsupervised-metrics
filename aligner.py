@@ -49,7 +49,7 @@ class XMoverAligner:
                 logging.info("Remap cross-lingual alignments with CLP")
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
                 tgt_embeddings = torch.matmul(tgt_embeddings, self.projection)
-            if self.mapping == 'UMD':
+            elif self.mapping == 'UMD':
                 logging.info("Remap cross-lingual alignments with UMD")
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
                         self.projection.repeat(self.embed_batch_size, src_embeddings.shape[1], 1)        
@@ -82,7 +82,11 @@ class XMoverAligner:
         tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer)
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                 self.model, self.tokenizer, self.embed_batch_size, self.device)
-        self.projection = clp(src_matrix, tgt_matrix) if self.mapping == "CLP" else umd(src_matrix, tgt_matrix)
+
+        if self.mapping == "CLP":
+            self.projection = clp(src_matrix, tgt_matrix, self.device)
+        elif self.mapping == "UMD":
+            self.projection = umd(src_matrix, tgt_matrix, self.device)
 
     def accuracy(self, ref_source_sents, ref_target_sents):
         shuffled_target_sents = sample(ref_target_sents, len(ref_target_sents))
