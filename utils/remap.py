@@ -147,8 +147,7 @@ def clp(x, z, device):
     return torch.Tensor(w).to(device)
 
 def umd(x, z, device):
-    *_, v = np.linalg.svd(x - z)  
-    v_b = v[0]
+    _, _, v_b = np.linalg.svd(x - z)  # TODO: ask Wei why he used v_b = v_b[0]
     return torch.Tensor(v_b).to(device)
 
 def remap(sent_pairs, model, tokenizer, batch_size, device):
