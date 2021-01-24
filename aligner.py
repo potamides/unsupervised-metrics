@@ -48,13 +48,10 @@ class XMoverAligner:
             if self.mapping == 'CLP':
                 logging.info("Remap cross-lingual alignments with CLP")
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
-                tgt_embeddings = torch.matmul(tgt_embeddings, self.projection)
             elif self.mapping == 'UMD':
                 logging.info("Remap cross-lingual alignments with UMD")
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
-                        self.projection.repeat(self.embed_batch_size, src_embeddings.shape[1], 1)        
-                tgt_embeddings = tgt_embeddings - (tgt_embeddings * self.projection).sum(2, keepdim=True) * \
-                        self.projection.repeat(self.embed_batch_size, tgt_embeddings.shape[1], 1)        
+                        self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)        
 
         candidates = None
         if self.use_knn:
@@ -72,7 +69,7 @@ class XMoverAligner:
         return pairs if return_indeces else sent_pairs, scores
 
     def remap(self, source_sents, target_sents):
-        logging.info(f"Computing projection used for {self.mapping} remapping method.")
+        logging.info(f'Computing projection tensor for {"CLP" if self.mapping == "CLP" else "UMD"} remapping method.')
 
         sent_pairs, scores = self.align(source_sents, target_sents)
         sorted_sent_pairs = list()
@@ -83,6 +80,7 @@ class XMoverAligner:
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                 self.model, self.tokenizer, self.embed_batch_size, self.device)
 
+        logging.info(f"Using {len(src_matrix)} aligned word pairs to compute projection tensor.")
         if self.mapping == "CLP":
             self.projection = clp(src_matrix, tgt_matrix, self.device)
         elif self.mapping == "UMD":
