@@ -52,7 +52,7 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
     # filter long/empty sentences
     fltr_src_bpe, fltr_tgt_bpe, fltr_align_pairs, fltr_bpe_table, align_cnt = [], [], [], [], 0
     for cnt, (src, tgt) in enumerate(bpe_para):
-        if len(src) <= max_seq_length and len(tgt) <= max_seq_length and len(src) > 0 or len(tgt) > 0:
+        if len(src) <= max_seq_length and len(tgt) <= max_seq_length and len(src) > 0 and len(tgt) > 0:
             fltr_src_bpe.append(src)
             fltr_tgt_bpe.append(tgt)
             fltr_align_pairs.append(align_pairs[cnt])
