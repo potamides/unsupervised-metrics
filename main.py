@@ -14,7 +14,8 @@ source_lang, target_lang = "de", "en"
 filename = f'news-commentary-v15.{source_lang}-{target_lang}.tsv.gz'
 url = f'http://data.statmt.org/news-commentary/v15/training/{filename}'
 path = (Path(__file__).parent / f'data/{filename}').resolve()
-samples = 30000
+eval_size = 3000
+remap_size = 30000
 
 if not isfile(path):
     logging.info(f"Downloading {filename} dataset.")
@@ -22,10 +23,10 @@ if not isfile(path):
 
 source_data, target_data, source_remap, target_remap = list(), list(), list(), list()
 with gopen(path, 'rt') as tsvfile:
-    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples):
+    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), eval_size):
         source_data.append(src)
         target_data.append(tgt)
-    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples, 2 * samples):
+    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), eval_size, eval_size + remap_size):
         source_remap.append(src)
         target_remap.append(tgt)
   
