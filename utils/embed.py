@@ -34,7 +34,7 @@ def embed(all_sens, bs, model, tokenizer, device):
     model.eval()
     with torch.no_grad():
         for (batch_padded_sens, batch_mask) in dataloader:
-            batch_padded_sens.to(device)
-            batch_mask.to(device)
+            batch_padded_sens = batch_padded_sens.to(device)
+            batch_mask = batch_mask.to(device)
             all_embeddings.append(model(batch_padded_sens, batch_mask)["last_hidden_state"].cpu())
     return torch.cat(all_embeddings), padded_idf, tokens, mask.unsqueeze(-1)
