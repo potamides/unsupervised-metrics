@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from aligner import XMoverAligner
-from csv import reader
+from csv import reader, QUOTE_NONE
 from itertools import islice
 from os.path import isfile
 from gzip import open as gopen
@@ -22,10 +22,10 @@ if not isfile(path):
 
 source_data, target_data, source_remap, target_remap = list(), list(), list(), list()
 with gopen(path, 'rt') as tsvfile:
-    for src, tgt in islice(reader(tsvfile, delimiter="\t"), samples):
+    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples):
         source_data.append(src)
         target_data.append(tgt)
-    for src, tgt in islice(reader(tsvfile, delimiter="\t"), samples, 2 * samples):
+    for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples, 2 * samples):
         source_remap.append(src)
         target_remap.append(tgt)
   
