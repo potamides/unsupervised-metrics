@@ -21,7 +21,7 @@ def slide_window(input_, w=3, o=1):
 def _safe_divide(numerator, denominator):
     return numerator / (denominator + 1e-30)
 
-def load_ngram(tokens, embedding, idf, n_gram, device):
+def load_ngram(tokens, embedding, idf, n_gram):
     new_a = []
     new_idf = []
     ids = [k for k, w in enumerate(tokens) if w not in set(string.punctuation) and '##' not in w]
@@ -29,10 +29,10 @@ def load_ngram(tokens, embedding, idf, n_gram, device):
     slide_wins = slide_window(np.array(ids), w=n_gram)
     for slide_win in slide_wins:
         new_idf.append(idf[slide_win].sum().item())
-        scale = _safe_divide(idf[slide_win], idf[slide_win].sum(0)).unsqueeze(-1).to(device)
+        scale = _safe_divide(idf[slide_win], idf[slide_win].sum(0)).unsqueeze(-1)
         tmp =  (scale * embedding[slide_win]).sum(0)
         new_a.append(tmp)
-    new_a = torch.stack(new_a, 0).to(device)
+    new_a = torch.stack(new_a, 0)
     return new_a, new_idf
 
 def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams):
@@ -48,20 +48,20 @@ def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tg
 
     score = 1 - emd(_safe_divide(c1, np.sum(c1)),
                 _safe_divide(c2, np.sum(c2)),
-                distance_matrix.double().cpu().numpy())
+                distance_matrix.double().numpy())
 
     return score
 
-def word_mover_align(source_data, target_data, n_gram, device, candidates=None):
+def word_mover_align(source_data, target_data, n_gram, candidates=None):
     src_embedding_ngrams, src_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*source_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, device)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
         src_embedding_ngrams.append(embedding_ngrams)
         src_idf_ngrams.append(idf_ngrams)
 
     tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*target_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, device)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
         tgt_embedding_ngrams.append(embedding_ngrams)
         tgt_idf_ngrams.append(idf_ngrams)
 

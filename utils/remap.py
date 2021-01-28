@@ -46,8 +46,8 @@ def convert_words_to_bpe(sent_pairs, tokenizer):
 
 
 def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
-        tokenizer, batch_size, device, size=100, max_seq_length=175): # TODO: ask Wei if size 100 is intended (threshold?)
-    bpe_para, bpe_table = convert_words_to_bpe(sent_pairs[:size], tokenizer)
+        tokenizer, batch_size, device, max_seq_length=175):
+    bpe_para, bpe_table = convert_words_to_bpe(sent_pairs, tokenizer)
 
     # filter long/empty sentences
     fltr_src_bpe, fltr_tgt_bpe, fltr_align_pairs, fltr_bpe_table, align_cnt = [], [], [], [], 0
@@ -70,28 +70,27 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
     tgt_sampler = SequentialSampler(tgt_data)
     tgt_dataloader = DataLoader(tgt_data, sampler=tgt_sampler, batch_size=batch_size)
     
-    model.eval()
-
     src_embed = []
     tgt_embed = []
 
-    for batch in src_dataloader:
-        input_ids, input_mask = batch
-        input_ids = input_ids.to(device)
-        input_mask = input_mask.to(device)
-        
-        with torch.no_grad():
+    model.eval()
+    with torch.no_grad():
+        for batch in src_dataloader:
+            input_ids, input_mask = batch
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            
             last_hidden_state = model(input_ids, attention_mask=input_mask)["last_hidden_state"]
-            src_embed.append(last_hidden_state[:,1:].detach().to('cpu').numpy()) # remove CLS
+            src_embed.append(last_hidden_state[:,1:].cpu().numpy()) # remove CLS
 
-    for batch in tgt_dataloader:
-        input_ids, input_mask = batch
-        input_ids = input_ids.to(device)
-        input_mask = input_mask.to(device)
-        
-        with torch.no_grad():
+    with torch.no_grad():
+        for batch in tgt_dataloader:
+            input_ids, input_mask = batch
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            
             last_hidden_state = model(input_ids, attention_mask=input_mask)["last_hidden_state"]
-            tgt_embed.append(last_hidden_state[:,1:].detach().to('cpu').numpy())
+            tgt_embed.append(last_hidden_state[:,1:].cpu().numpy())
 
     src_embed = np.concatenate(src_embed)
     tgt_embed = np.concatenate(tgt_embed)
@@ -116,7 +115,7 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
 
     return src_matrix, tgt_matrix
 
-def word_align(sent_pairs, tokenizer, size=30000, max_seq_length=100):
+def word_align(sent_pairs, tokenizer, size, max_seq_length=100):
     tokenized_pairs = list()
     for source_sent, target_sent in sent_pairs:
         sent1 = tokenizer.basic_tokenizer.tokenize(source_sent)
@@ -141,22 +140,16 @@ def word_align(sent_pairs, tokenizer, size=30000, max_seq_length=100):
     sym_aligned = [[tuple(map(int, pair.split(b"-"))) for pair in pairs.split()] for pairs in sym_aligned.splitlines()]
     return tokenized_pairs, sym_aligned
 
-def clp(x, z, device, orthogonal=True):
+def clp(x, z, orthogonal=True):
     if orthogonal:
         u, _, vt = np.linalg.svd(z.T.dot(x))
         w = vt.T.dot(u.T)
     else:
         x_pseudoinv = np.linalg.inv(x.T.dot(x)).dot(x.T)
         w = x_pseudoinv.dot(z)
-    return torch.Tensor(w).to(device)
+    return torch.Tensor(w)
 
-def umd(x, z, device):
+def umd(x, z):
     *_, v = np.linalg.svd(x - z)  
     v_b = v[0]
-    return torch.Tensor(v_b).to(device)
-
-def remap(sent_pairs, model, tokenizer, batch_size, device):
-    tokenized_pairs, align_pairs = word_align(sent_pairs, tokenizer)
-    src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
-            model, tokenizer, batch_size, device)
-    return clp(src_matrix, tgt_matrix)
+    return torch.Tensor(v_b)

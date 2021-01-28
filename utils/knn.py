@@ -41,5 +41,5 @@ def knn_sharded(source_data, target_data, k, batch_size, device):
     return sim, ind
 
 def find_nearest_neighbors(source_data, target_data, k, batch_size, device):
-    _, indeces = knn_sharded(source_data.cpu().numpy(), target_data.cpu().numpy(), k, batch_size, device)
+    _, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
     return indeces

@@ -14,8 +14,7 @@ source_lang, target_lang = "de", "en"
 filename = f'news-commentary-v15.{source_lang}-{target_lang}.tsv.gz'
 url = f'http://data.statmt.org/news-commentary/v15/training/{filename}'
 path = (Path(__file__).parent / f'data/{filename}').resolve()
-samples = 3000
-remapping_steps = 10
+samples = 30000
 
 if not isfile(path):
     logging.info(f"Downloading {filename} dataset.")
@@ -31,8 +30,6 @@ with gopen(path, 'rt') as tsvfile:
         target_remap.append(tgt)
   
 aligner = XMoverAligner()
-logging.info(f"Accuracy before remapping: {aligner.accuracy(source_data, target_data)}")
-for iteration in range(1, remapping_steps + 1):
-    logging.info(f"Remapping iteration {iteration} of {remapping_steps}.")
-    aligner.remap(source_remap, target_remap)
-logging.info(f"Accuracy after remapping: {aligner.accuracy(source_data, target_data)}")
+logging.info(f"Precision @ 1 before remapping: {aligner.precision(source_data, target_data)}")
+aligner.remap(source_remap, target_remap)
+logging.info(f"Precision @ 1 after remapping: {aligner.precision(source_data, target_data)}")

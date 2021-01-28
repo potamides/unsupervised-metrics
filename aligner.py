@@ -48,7 +48,7 @@ class XMoverAligner:
             if self.mapping == 'CLP':
                 logging.info("Remap cross-lingual alignments with CLP")
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
-            elif self.mapping == 'UMD':
+            else:
                 logging.info("Remap cross-lingual alignments with UMD")
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
                         self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)        
@@ -63,7 +63,7 @@ class XMoverAligner:
 
         logging.info("Computing word mover scores.")
         pairs, scores = word_mover_align((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
-                self.n_gram, self.device, candidates)
+                self.n_gram, candidates)
         sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in pairs]
 
         return pairs if return_indeces else sent_pairs, scores
@@ -76,17 +76,18 @@ class XMoverAligner:
         for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
             sorted_sent_pairs.append((src_sent, tgt_sent))
 
-        tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer)
+        size = 30000 if self.mapping == "CLP" else 2000
+        tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, size)
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                 self.model, self.tokenizer, self.embed_batch_size, self.device)
 
         logging.info(f"Using {len(src_matrix)} aligned word pairs to compute projection tensor.")
         if self.mapping == "CLP":
-            self.projection = clp(src_matrix, tgt_matrix, self.device)
-        elif self.mapping == "UMD":
-            self.projection = umd(src_matrix, tgt_matrix, self.device)
+            self.projection = clp(src_matrix, tgt_matrix)
+        else:
+            self.projection = umd(src_matrix, tgt_matrix)
 
-    def accuracy(self, ref_source_sents, ref_target_sents):
+    def precision(self, ref_source_sents, ref_target_sents):
         shuffled_target_sents = sample(ref_target_sents, len(ref_target_sents))
         pairs, _ = self.align(ref_source_sents, shuffled_target_sents, True)
 
