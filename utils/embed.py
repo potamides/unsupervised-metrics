@@ -24,17 +24,17 @@ def collate_idf(arr, tokenize, numericalize):
     return padded, padded_idf, mask, tokens
 
 def embed(all_sens, bs, model, tokenizer, device):
-    all_embeddings = list()
     padded_sens, padded_idf, mask, tokens = collate_idf(all_sens, tokenizer.tokenize,
             tokenizer.convert_tokens_to_ids)
     data = TensorDataset(padded_sens, mask)
     sampler = SequentialSampler(data)
     dataloader = DataLoader(data, sampler=sampler, batch_size=bs)
+    all_embeddings = torch.zeros((len(all_sens), mask.shape[1], model.config.hidden_size))
 
     model.eval()
     with torch.no_grad():
-        for (batch_padded_sens, batch_mask) in dataloader:
+        for index, (batch_padded_sens, batch_mask) in enumerate(dataloader):
             batch_padded_sens = batch_padded_sens.to(device)
             batch_mask = batch_mask.to(device)
-            all_embeddings.append(model(batch_padded_sens, batch_mask)["last_hidden_state"].cpu())
-    return torch.cat(all_embeddings), padded_idf, tokens, mask.unsqueeze(-1)
+            all_embeddings[index:index + bs] = model(batch_padded_sens, batch_mask)["last_hidden_state"].cpu()
+    return all_embeddings, padded_idf, tokens, mask.unsqueeze(-1)
