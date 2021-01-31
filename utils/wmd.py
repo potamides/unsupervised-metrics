@@ -85,3 +85,22 @@ def word_mover_align(source_data, target_data, n_gram, candidates=None):
         scores.append(best_score)
 
     return pairs, scores
+
+def word_mover_score(source_data, target_data, n_gram):
+    src_embedding_ngrams, src_idf_ngrams = list(), list()
+    for embedding, idf, tokens in zip(*source_data):
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        src_embedding_ngrams.append(embedding_ngrams)
+        src_idf_ngrams.append(idf_ngrams)
+
+    tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
+    for embedding, idf, tokens in zip(*target_data):
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        tgt_embedding_ngrams.append(embedding_ngrams)
+        tgt_idf_ngrams.append(idf_ngrams)
+
+    scores = list()
+    for data in zip(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams):
+        scores.append(compute_score(*data))
+
+    return scores

@@ -1,10 +1,10 @@
 from transformers import BertModel, BertTokenizer, BertConfig
-from utils.wmd import word_mover_align
+from utils.wmd import word_mover_align, word_mover_score
 from utils.knn import find_nearest_neighbors
 from utils.embed import embed
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
 from torch.cuda import is_available as cuda_is_available
-from random import sample
+from numpy import corrcoef
 import logging
 import torch
 
@@ -27,8 +27,9 @@ class XMoverAligner:
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(model_name, config=config)
         self.model.to(device)
-        self.mapping = mapping
         self.device = device
+        self.mapping = mapping
+        self.remap_size = 10000 if self.mapping == "CLP" else 2000
         self.use_knn = use_knn
         self.k = k
         self.n_gram = n_gram
@@ -36,7 +37,7 @@ class XMoverAligner:
         self.knn_batch_size = knn_batch_size
         self.projection = None
 
-    def align(self, source_sents, target_sents, return_indeces=False):
+    def _embed(self, source_sents, target_sents):
         logging.info("Embedding source sentences with mBERT.")
         src_embeddings, src_idf, src_tokens, src_mask = embed(source_sents, self.embed_batch_size, self.model,
                 self.tokenizer, self.device)
@@ -53,6 +54,13 @@ class XMoverAligner:
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
                         self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)        
 
+        return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
+
+
+    def align(self, source_sents, target_sents):
+        src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = self._embed(
+                source_sents, target_sents)
+
         candidates = None
         if self.use_knn:
             logging.info("Finding nearest neighbors with KNN algorithm.")
@@ -65,8 +73,14 @@ class XMoverAligner:
         pairs, scores = word_mover_align((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
                 self.n_gram, candidates)
         sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in pairs]
+        return sent_pairs, scores
 
-        return pairs if return_indeces else sent_pairs, scores
+    def score(self, source_sents, target_sents):
+        src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed( source_sents,
+                target_sents)
+        scores = word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
+                self.n_gram)
+        return scores
 
     def remap(self, source_sents, target_sents):
         logging.info(f'Computing projection tensor for {"CLP" if self.mapping == "CLP" else "UMD"} remapping method.')
@@ -76,8 +90,7 @@ class XMoverAligner:
         for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
             sorted_sent_pairs.append((src_sent, tgt_sent))
 
-        size = 30000 if self.mapping == "CLP" else 2000
-        tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, size)
+        tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                 self.model, self.tokenizer, self.embed_batch_size, self.device)
 
@@ -87,10 +100,10 @@ class XMoverAligner:
         else:
             self.projection = umd(src_matrix, tgt_matrix)
 
-    def precision(self, ref_source_sents, ref_target_sents):
-        shuffled_target_sents = sample(ref_target_sents, len(ref_target_sents))
-        pairs, _ = self.align(ref_source_sents, shuffled_target_sents, True)
+    def precision(self, source_sents, ref_sents):
+        pairs, _ = self.align(source_sents, ref_sents)
+        return sum([reference == predicted for reference, (_, predicted) in zip(ref_sents, pairs)]) / len(ref_sents)
 
-        return sum([ref == shuffled_target_sents[out] for ref, (_, out) in
-            zip(ref_target_sents, pairs)]) / len(ref_source_sents)
-        
+    def correlation(self, source_sents, system_sents, ref_scores):
+        scores = self.score(source_sents, system_sents)
+        return corrcoef(ref_scores, scores)[0,1]
