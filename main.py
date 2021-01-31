@@ -11,6 +11,7 @@ import logging
 
 source_lang, target_lang = "de", "en"
 iterations = 5
+max_monolingual_sent_len = 80
 
 parallel_data = {
     "filename": f"news-commentary-v15.{source_lang}-{target_lang}.tsv.gz",
@@ -48,7 +49,7 @@ def download_datasets():
                 logging.info(f"Downloading {filename} dataset.")
                 urlretrieve(join(url, filename), join(dataset["path"], filename))
 
-def extract_datasets():
+def extract_datasets(tokenize):
     parallel_source, parallel_target = list(), list()
     with gopen(join(parallel_data["path"], parallel_data["filename"]), 'rt') as tsvfile:
         for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"]):
@@ -58,9 +59,19 @@ def extract_datasets():
     mono_source, mono_target= list(), list()
     mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
     with gopen(join(mpath, mfilenames[0]), "rt") as f, gopen(join(mpath, mfilenames[1]), "rt") as g:
-        for src, tgt in islice(zip(f, g), monolingual_data["samples"]):
-            mono_source.append(src.strip())
-            mono_target.append(tgt.strip())
+        collected_src_samples, collected_tgt_samples = 0, 0
+        for src in f:
+            if len(tokenize(src)) < max_monolingual_sent_len:
+                mono_source.append(src.strip())
+                collected_src_samples += 1
+                if collected_src_samples >= monolingual_data["samples"]:
+                    break
+        for tgt in g:
+            if len(tokenize(tgt)) < max_monolingual_sent_len:
+                mono_target.append(tgt.strip())
+                collected_tgt_samples += 1
+                if collected_tgt_samples >= monolingual_data["samples"]:
+                    break
 
     eval_source, eval_ref, eval_system, eval_scores = list(), list(), list(), list()
     samples, members = eval_data["samples"], eval_data["members"]
@@ -75,8 +86,9 @@ def extract_datasets():
   
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
-parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, eval_ref, eval_system, eval_scores = extract_datasets()
 aligner = XMoverAligner()
+parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, eval_ref, eval_system, eval_scores = extract_datasets(
+        aligner.tokenizer.tokenize)
 
 logging.info(f"Precision @ 1 before remapping: {aligner.precision(parallel_src, parallel_tgt)}.")
 logging.info(f"Pearson correlation before remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
