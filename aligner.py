@@ -18,6 +18,7 @@ class XMoverAligner:
         use_knn = True,
         k = 20,
         n_gram = 1,
+        remap_size = 2000,
         embed_batch_size = 128,
         knn_batch_size = 1000000,
     ):
@@ -29,7 +30,7 @@ class XMoverAligner:
         self.model.to(device)
         self.device = device
         self.mapping = mapping
-        self.remap_size = 10000 if self.mapping == "CLP" else 2000
+        self.remap_size = remap_size
         self.use_knn = use_knn
         self.k = k
         self.n_gram = n_gram
