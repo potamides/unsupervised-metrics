@@ -57,20 +57,14 @@ def extract_datasets(tokenize):
             parallel_target.append(tgt)
 
     mono_source, mono_target= list(), list()
-    mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
-    with gopen(join(mpath, mfilenames[0]), "rt") as f, gopen(join(mpath, mfilenames[1]), "rt") as g:
-        collected_src_samples, collected_tgt_samples = 0, 0
-        for src in f:
-            if len(tokenize(src)) < max_monolingual_sent_len:
+    with gopen(join(parallel_data["path"], parallel_data["filename"]), 'rt') as tsvfile:
+        collected_samples = 0
+        for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"], None):
+            if len(tokenize(src)) < max_monolingual_sent_len and len(tokenize(tgt)) < max_monolingual_sent_len:
                 mono_source.append(src.strip())
-                collected_src_samples += 1
-                if collected_src_samples >= monolingual_data["samples"]:
-                    break
-        for tgt in g:
-            if len(tokenize(tgt)) < max_monolingual_sent_len:
                 mono_target.append(tgt.strip())
-                collected_tgt_samples += 1
-                if collected_tgt_samples >= monolingual_data["samples"]:
+                collected_samples += 1
+                if collected_samples >= monolingual_data["samples"]:
                     break
 
     eval_source, eval_ref, eval_system, eval_scores = list(), list(), list(), list()
