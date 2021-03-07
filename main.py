@@ -37,6 +37,13 @@ eval_data = {
         f"DAseg-wmt-newstest2016/DAseg.newstest2016.human.{source_lang}-{target_lang}",
     )
 }
+word_vectors = {
+    "filenames": (f"cc.{source_lang}.300.bin.gz", f"cc.{target_lang}.300.bin.gz"),
+    "urls": (
+        "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl",
+        "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl"
+    )
+}
 
 def download_datasets():
     for dataset in (parallel_data, monolingual_data, eval_data):
