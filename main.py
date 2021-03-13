@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from aligner import XMoverAligner
+from aligner import XMoverBertAligner, XMoverMapAligner
 from csv import reader, QUOTE_NONE
 from itertools import islice
 from os.path import isfile, join
@@ -7,6 +7,7 @@ from gzip import open as gopen
 from tarfile import open as topen
 from urllib.request import urlretrieve
 from pathlib import Path
+from fasttext import tokenize
 import logging
 
 source_lang, target_lang = "de", "en"
@@ -37,13 +38,6 @@ eval_data = {
         f"DAseg-wmt-newstest2016/DAseg.newstest2016.human.{source_lang}-{target_lang}",
     )
 }
-word_vectors = {
-    "filenames": (f"cc.{source_lang}.300.bin.gz", f"cc.{target_lang}.300.bin.gz"),
-    "urls": (
-        "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl",
-        "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl"
-    )
-}
 
 def download_datasets():
     for dataset in (parallel_data, monolingual_data, eval_data):
@@ -60,8 +54,9 @@ def extract_datasets(tokenize):
     parallel_source, parallel_target = list(), list()
     with gopen(join(parallel_data["path"], parallel_data["filename"]), 'rt') as tsvfile:
         for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"]):
-            parallel_source.append(src)
-            parallel_target.append(tgt)
+            if src.strip() and tgt.strip():
+                parallel_source.append(src)
+                parallel_target.append(tgt)
 
     mono_source, mono_target= list(), list()
     mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
@@ -90,17 +85,29 @@ def extract_datasets(tokenize):
             eval_scores.append(float(score.decode()))
 
     return parallel_source, parallel_target, mono_source, mono_target, eval_source, eval_ref, eval_system, eval_scores
+
+def bert_tests():
+    aligner = XMoverBertAligner()
+    parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, _, eval_system, eval_scores = extract_datasets(
+            aligner.tokenizer.tokenize)
+
+    logging.info(f"Precision @ 1 before remapping: {aligner.precision(parallel_src, parallel_tgt)}.")
+    logging.info(f"Pearson correlation before remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+    for iteration in range(1, iterations + 1):
+        logging.info(f"Remapping iteration {iteration}.")
+        aligner.remap(mono_src, mono_tgt)
+        logging.info(f"Precision @ 1 after remapping: {aligner.precision(parallel_src, parallel_tgt)}")
+        logging.info(f"Pearson correlation after remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}")
   
+def vecmap_tests():
+    aligner = XMoverMapAligner(src_lang=source_lang, tgt_lang=target_lang)
+    parallel_src, parallel_tgt, _, _, eval_src, _, eval_system, eval_scores = extract_datasets(
+            tokenize)
+
+    logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
+    logging.info(f"Pearson: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
-aligner = XMoverAligner()
-parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, eval_ref, eval_system, eval_scores = extract_datasets(
-        aligner.tokenizer.tokenize)
-
-logging.info(f"Precision @ 1 before remapping: {aligner.precision(parallel_src, parallel_tgt)}.")
-logging.info(f"Pearson correlation before remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
-for iteration in range(1, iterations + 1):
-    logging.info(f"Remapping iteration {iteration}.")
-    aligner.remap(mono_src, mono_tgt)
-    logging.info(f"Precision @ 1 after remapping: {aligner.precision(parallel_src, parallel_tgt)}")
-    logging.info(f"Pearson correlation after remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}")
+#bert_tests()
+vecmap_tests()
