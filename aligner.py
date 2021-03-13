@@ -59,7 +59,7 @@ class XMoverBertAligner(XMoverAligner):
     def __init__(
         self,
         model_name="bert-base-multilingual-cased",
-        mapping="CLP",
+        mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
         use_knn = True,
