@@ -134,11 +134,15 @@ class XMoverMapAligner(XMoverAligner):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.batch_size = batch_size
+        self.de_dict = None
+        self.en_dict = None
 
     def _embed(self, source_sents, target_sents):
-        logging.info("Obtaining cross-lingual word embedding mappings from fasttext embeddings.")
-        de_dict, en_dict = map_multilingual_embeddings(self.src_lang, self.tgt_lang, self.batch_size, self.device)
-        src_embeddings, src_idf, src_tokens, src_mask = vecmap_embed(source_sents, de_dict)
-        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, en_dict)
+        if self.de_dict is None or self.en_dict is None:
+            logging.info("Obtaining cross-lingual word embedding mappings from fasttext embeddings.")
+            self.de_dict, self.en_dict = map_multilingual_embeddings(self.src_lang, self.tgt_lang,
+                    self.batch_size, self.device)
+        src_embeddings, src_idf, src_tokens, src_mask = vecmap_embed(source_sents, self.de_dict)
+        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.en_dict)
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
