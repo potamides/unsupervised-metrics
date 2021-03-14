@@ -7,6 +7,10 @@
    ```python
    pip install -r requirements.txt
    ```
+2. Setup [VecMap](https://github.com/artetxem/vecmap):
+   ```sh
+   git submodule update --init
+   ```
 
 ## Usage
 
