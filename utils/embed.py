@@ -5,15 +5,17 @@ from collections import defaultdict
 from sys import path, argv
 from os.path import join, dirname, abspath, isfile
 from shutil import copyfileobj
-from fasttext import tokenize
 from urllib.request import urlretrieve
 from gzip import open as gopen
 from tempfile import NamedTemporaryFile as TempFile
 path.append(abspath(join(dirname(__file__), 'vecmap')))
 from .vecmap.map_embeddings import main as vecmap
+from nltk import tokenize, download, data
 
 fasttext_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/"
 datadir = str(abspath(join(dirname(__file__), '../data')))
+download('punkt', download_dir=datadir, quiet=True)
+data.path.append(datadir)
 
 def padding(arr, pad_token, dtype=torch.long):
     lens = torch.LongTensor([len(a) for a in arr])
@@ -93,7 +95,7 @@ def get_embeddings_file(lang_id):
 def vecmap_embed(all_sents, lang_dict):
     tokens, idf_weights, embeddings = list(), list(), list()
     for sent in all_sents:
-        tokens.append([word for word in tokenize(sent)])
+        tokens.append([word for word in tokenize.word_tokenize(sent)])
         idf_weights.append([1] * len(tokens[-1]))
         embeddings.append(torch.stack([lang_dict[word] for word in tokens[-1]]))
 
