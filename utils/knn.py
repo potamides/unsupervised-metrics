@@ -40,6 +40,25 @@ def knn_sharded(source_data, target_data, k, batch_size, device):
     ind = np.concatenate(inds, axis=0)
     return sim, ind
 
+def score_candidates(sim_mat, candidate_inds, fwd_mean, bwd_mean):
+    scores = np.zeros(candidate_inds.shape)
+    for i in range(scores.shape[0]):
+        for j in range(scores.shape[1]):
+            k = int(candidate_inds[i, j])
+            scores[i, j] = sim_mat[i, j] / ((fwd_mean[i] + bwd_mean[k]) / 2)
+    return scores
+
+def ratio_margin_align(source_data, target_data, k, batch_size, device):
+    src2tgt_sim, src2tgt_ind = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
+    tgt2src_sim, _ = knn_sharded(target_data.numpy(), source_data.numpy(), k, batch_size, device)
+
+    src2tgt_mean = src2tgt_sim.mean(axis=1)
+    tgt2src_mean = tgt2src_sim.mean(axis=1)
+    fwd_scores = score_candidates(src2tgt_sim, src2tgt_ind, src2tgt_mean, tgt2src_mean)
+    fwd_best = src2tgt_ind[np.arange(src2tgt_sim.shape[0]), fwd_scores.argmax(axis=1)]
+
+    return list(enumerate(fwd_best)), fwd_scores.max(axis=1)
+
 def find_nearest_neighbors(source_data, target_data, k, batch_size, device):
     _, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
     return indeces

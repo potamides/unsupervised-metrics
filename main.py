@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from aligner import XMoverBertAligner, XMoverMapAligner
+from aligner import RatioMarginBertAligner, XMoverBertAligner, XMoverVecMapAligner
 from csv import reader, QUOTE_NONE
 from itertools import islice
 from os.path import isfile, join
@@ -7,7 +7,7 @@ from gzip import open as gopen
 from tarfile import open as topen
 from urllib.request import urlretrieve
 from pathlib import Path
-from fasttext import tokenize
+from nltk import tokenize
 import logging
 
 source_lang, target_lang = "de", "en"
@@ -86,8 +86,8 @@ def extract_datasets(tokenize):
 
     return parallel_source, parallel_target, mono_source, mono_target, eval_source, eval_ref, eval_system, eval_scores
 
-def bert_tests():
-    aligner = XMoverBertAligner()
+def bert_tests(use_ratio_margin=False):
+    aligner = RatioMarginBertAligner() if use_ratio_margin else XMoverBertAligner()
     parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, _, eval_system, eval_scores = extract_datasets(
             aligner.tokenizer.tokenize)
 
@@ -100,9 +100,8 @@ def bert_tests():
         logging.info(f"Pearson correlation after remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}")
   
 def vecmap_tests():
-    aligner = XMoverMapAligner(src_lang=source_lang, tgt_lang=target_lang)
-    parallel_src, parallel_tgt, _, _, eval_src, _, eval_system, eval_scores = extract_datasets(
-            tokenize)
+    aligner = XMoverVecMapAligner(src_lang=source_lang, tgt_lang=target_lang)
+    parallel_src, parallel_tgt, _, _, eval_src, _, eval_system, eval_scores = extract_datasets(tokenize)
 
     logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
     logging.info(f"Pearson: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
@@ -110,4 +109,5 @@ def vecmap_tests():
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
 #bert_tests()
-vecmap_tests()
+bert_tests(True)
+#vecmap_tests()
