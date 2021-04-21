@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from aligner import RatioMarginBertAligner, XMoverBertAligner, XMoverVecMapAligner
+from aligner import RatioMarginBertAligner, XMoverBertAligner, XMoverVecMapAligner, XMoverNMTBertAligner
 from csv import reader, QUOTE_NONE
 from itertools import islice
 from os.path import isfile, join
@@ -50,46 +50,53 @@ def download_datasets():
                 logging.info(f"Downloading {filename} dataset.")
                 urlretrieve(join(url, filename), join(dataset["path"], filename))
 
-def extract_datasets(tokenize):
-    parallel_source, parallel_target = list(), list()
-    with gopen(join(parallel_data["path"], parallel_data["filename"]), 'rt') as tsvfile:
-        for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"]):
-            if src.strip() and tgt.strip():
-                parallel_source.append(src)
-                parallel_target.append(tgt)
+def extract_dataset(tokenize, type_, monolingual_full=False):
+    if type_ == "parallel":
+        parallel_source, parallel_target = list(), list()
+        with gopen(join(parallel_data["path"], parallel_data["filename"]), 'rt') as tsvfile:
+            for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"]):
+                if src.strip() and tgt.strip():
+                    parallel_source.append(src)
+                    parallel_target.append(tgt)
+        return parallel_source, parallel_target
 
-    mono_source, mono_target= list(), list()
-    mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
-    with gopen(join(mpath, mfilenames[0]), "rt") as f, gopen(join(mpath, mfilenames[1]), "rt") as g:
-        collected_src_samples, collected_tgt_samples = 0, 0
-        for src in f:
-            if len(tokenize(src)) < max_monolingual_sent_len:
-                mono_source.append(src.strip())
-                collected_src_samples += 1
-                if collected_src_samples >= monolingual_data["samples"]:
-                    break
-        for tgt in g:
-            if len(tokenize(tgt)) < max_monolingual_sent_len:
-                mono_target.append(tgt.strip())
-                collected_tgt_samples += 1
-                if collected_tgt_samples >= monolingual_data["samples"]:
-                    break
+    elif type_ == "monolingual":
+        mono_source, mono_target= list(), list()
+        mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
+        with gopen(join(mpath, mfilenames[0]), "rt") as f, gopen(join(mpath, mfilenames[1]), "rt") as g:
+            collected_src_samples, collected_tgt_samples = 0, 0
+            for src in f:
+                if len(tokenize(src)) < max_monolingual_sent_len:
+                    mono_source.append(src.strip())
+                    collected_src_samples += 1
+                    if not monolingual_full and collected_src_samples >= monolingual_data["samples"]:
+                        break
+            for tgt in g:
+                if len(tokenize(tgt)) < max_monolingual_sent_len:
+                    mono_target.append(tgt.strip())
+                    collected_tgt_samples += 1
+                    if not monolingual_full and collected_tgt_samples >= monolingual_data["samples"]:
+                        break
+        return mono_source, mono_target
 
-    eval_source, eval_ref, eval_system, eval_scores = list(), list(), list(), list()
-    samples, members = eval_data["samples"], eval_data["members"]
-    with topen(join(eval_data["path"], eval_data["filename"]), 'r:gz') as tf:
-        for src, ref, mt, score in zip(*map(lambda x: islice(tf.extractfile(x), samples), members)):
-            eval_source.append(src.decode().strip())
-            eval_ref.append(ref.decode().strip())
-            eval_system.append(mt.decode().strip())
-            eval_scores.append(float(score.decode()))
-
-    return parallel_source, parallel_target, mono_source, mono_target, eval_source, eval_ref, eval_system, eval_scores
+    elif type_ == "scored":
+        eval_source, eval_ref, eval_system, eval_scores = list(), list(), list(), list()
+        samples, members = eval_data["samples"], eval_data["members"]
+        with topen(join(eval_data["path"], eval_data["filename"]), 'r:gz') as tf:
+            for src, ref, mt, score in zip(*map(lambda x: islice(tf.extractfile(x), samples), members)):
+                eval_source.append(src.decode().strip())
+                eval_ref.append(ref.decode().strip())
+                eval_system.append(mt.decode().strip())
+                eval_scores.append(float(score.decode()))
+        return eval_source, eval_ref, eval_system, eval_scores
+    else:
+        raise ValueError(f"{type_} is not a valid type!")
 
 def bert_tests(use_ratio_margin=False):
     aligner = RatioMarginBertAligner() if use_ratio_margin else XMoverBertAligner()
-    parallel_src, parallel_tgt, mono_src, mono_tgt, eval_src, _, eval_system, eval_scores = extract_datasets(
-            aligner.tokenizer.tokenize)
+    parallel_src, parallel_tgt = extract_dataset(aligner.tokenizer.tokenize, "parallel")
+    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
+    eval_src, _, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
 
     logging.info(f"Precision @ 1 before remapping: {aligner.precision(parallel_src, parallel_tgt)}.")
     logging.info(f"Pearson correlation before remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
@@ -101,13 +108,24 @@ def bert_tests(use_ratio_margin=False):
   
 def vecmap_tests():
     aligner = XMoverVecMapAligner(src_lang=source_lang, tgt_lang=target_lang)
-    parallel_src, parallel_tgt, _, _, eval_src, _, eval_system, eval_scores = extract_datasets(tokenize)
+    parallel_src, parallel_tgt = extract_dataset(tokenize, "parallel")
+    eval_src, _, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
 
     logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
     logging.info(f"Pearson: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+
+def mine_data():
+    aligner = XMoverNMTBertAligner()
+    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
+    for iteration in range(1, iterations + 1):
+        logging.info(f"Remapping iteration {iteration}.")
+        aligner.remap(mono_src, mono_tgt)
+    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
+    aligner.mine(mono_src, mono_tgt, True)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
 #bert_tests()
 bert_tests(True)
 #vecmap_tests()
+#mine_data()

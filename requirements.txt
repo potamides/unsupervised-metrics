@@ -4,3 +4,4 @@ torch==1.7.1
 transformers==4.1.1
 cupy-cuda100==8.5.0
 nltk==3.5
+sentencepiece==0.1.95
