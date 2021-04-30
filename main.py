@@ -109,23 +109,23 @@ def bert_tests(use_ratio_margin=False):
 def vecmap_tests():
     aligner = XMoverVecMapAligner(src_lang=source_lang, tgt_lang=target_lang)
     parallel_src, parallel_tgt = extract_dataset(tokenize, "parallel")
-    eval_src, _, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
+    eval_src, _, eval_system, eval_scores = extract_dataset(tokenize, "scored")
 
     logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
     logging.info(f"Pearson: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
 
-def mine_data():
-    aligner = XMoverNMTBertAligner()
+def nmt_tests():
+    aligner = XMoverNMTBertAligner(src_lang=source_lang, tgt_lang=target_lang)
+    #mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
+    #for iteration in range(1, iterations + 1):
+    #    logging.info(f"Remapping iteration {iteration}.")
+    #    aligner.remap(mono_src, mono_tgt)
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
-    for iteration in range(1, iterations + 1):
-        logging.info(f"Remapping iteration {iteration}.")
-        aligner.remap(mono_src, mono_tgt)
-    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
-    aligner.mine(mono_src, mono_tgt, True)
+    aligner.train(mono_src, mono_tgt, True)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
 #bert_tests()
-bert_tests(True)
+#bert_tests(True)
 #vecmap_tests()
-#mine_data()
+nmt_tests()

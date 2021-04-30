@@ -39,6 +39,8 @@ def collate_idf(arr, tokenize, numericalize):
     return padded, padded_idf, mask, tokens
 
 def bert_embed(all_sens, batch_size, model, tokenizer, device):
+    if len(all_sens) == 0:
+        return torch.empty(0), torch.empty(0), list(), torch.empty(0)
     padded_sens, padded_idf, mask, tokens = collate_idf(all_sens, tokenizer.tokenize,
             tokenizer.convert_tokens_to_ids)
     data = TensorDataset(padded_sens, mask)

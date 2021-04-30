@@ -3,11 +3,13 @@ from utils.wmd import word_mover_align, word_mover_score
 from utils.knn import find_nearest_neighbors, ratio_margin_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
+from utils.train import mbart_train as mt_train
 from torch.cuda import is_available as cuda_is_available
 from torch.nn.functional import cosine_similarity
-from os.path import join, dirname, abspath, exists
+from os.path import isfile, join, dirname, abspath
+from json import dumps
+from math import ceil
 from numpy import corrcoef
-from random import shuffle
 from itertools import islice
 from abc import ABC, abstractmethod
 import logging
@@ -98,19 +100,13 @@ class XMoverNMTAligner(XMoverAligner):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(
-        self,
-        device, use_knn, k, n_gram, knn_batch_size,
-        cache_dir = str(abspath(join(dirname(__file__), 'data'))),
-        cutoff = 2000,
-        mine_batch_size = 20000,
-        src_lang = "de",
-        tgt_lang = "en",
-    ):
-        super.__init__(device, use_knn, k, n_gram, knn_batch_size)
-        self.cache_dir = cache_dir
-        self.cutoff = cutoff
+    def __init__(self, device, use_knn, k, n_gram, knn_batch_size, datadir, mine_ratio,
+        mine_batch_size, src_lang, tgt_lang,):
+        super().__init__(device, use_knn, k, n_gram, knn_batch_size)
+        self.datadir = datadir
+        self.mine_ratio = mine_ratio
         self.mine_batch_size = mine_batch_size
+        self.knn_batch_size = knn_batch_size
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
@@ -119,38 +115,39 @@ class XMoverNMTAligner(XMoverAligner):
         # TODO
         return super().align(source_sents, target_sents)
 
+    #Override
     def score(self, source_sents, target_sents):
         # TODO
         return super().score(source_sents, target_sents)
 
-    def mine(self, source_sents, target_sents, overwrite=False):
-        file_path = join(self.cache_dir, f"{self.src_lang}-{self.tgt_lang}-aligned.txt")
-        mined_pairs = list()
-        if exists(file_path) and not overwrite:
-            with open(file_path, "rb") as f:
-                for line in f:
-                    mined_pairs.append(tuple(line.decode().split("\n")))
-            return mined_pairs
+    def train(self, source_sents, target_sents, overwrite=True):
+        file_path = join(self.datadir, f"{self.src_lang}-{self.tgt_lang}-mined.json")
 
-        with open(file_path, "wb") as f:
-            while batches_left := min(len(source_sents), len(target_sents)) // self.mine_batch_size:
-                logging.info(f"Mining pseudo parallel data ({batches_left} batches left).")
-                shuffle(source_sents)
-                shuffle(target_sents)
+        if not isfile(file_path) or overwrite:
+            source_sent_embeddings, target_sent_embeddings, idx  = list(), list(), 0
+            batches = ceil(max(len(source_sents), len(target_sents)) / self.mine_batch_size)
+            while idx < max(len(source_sents), len(target_sents)):
+                logging.info(f"Embedding sentences (batch {int(idx / self.mine_batch_size) + 1}/{batches}).")
+                src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
+                        source_sents[idx:idx + self.mine_batch_size], target_sents[idx:idx + self.mine_batch_size])
+                if len(src_embeddings) > 0:
+                    source_sent_embeddings.append(torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1))
+                if len(tgt_embeddings) > 0:
+                    target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
+                idx += self.mine_batch_size
 
-                pairs, scores = self.align(source_sents[:self.mine_batch_size], target_sents[:self.mine_batch_size])
-                for _, pair in islice(sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True), self.cutoff):
-                    mined_pairs.append(pair)
-                    f.write("\t".join(pair).encode())
+            logging.info("Mining pseudo parallel data with Ratio Margin function.")
+            pairs, scores = ratio_margin_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
+                    self.k, self.knn_batch_size, self.device)
 
-                source_sents = source_sents[self.mine_batch_size:]
-                target_sents = target_sents[self.mine_batch_size:]
+            with open(file_path, "wb") as f:
+                cutoff = round(self.mine_ratio * len(pairs))
+                for _, (src, tgt) in islice(sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True), cutoff):
+                    line = { "translation": { self.src_lang: source_sents[src], self.tgt_lang: target_sents[tgt]} }
+                    f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-            return mined_pairs
+        self.mt_model, self.mt_tokenizer = mt_train(self.src_lang, self.tgt_lang, file_path, overwrite, self.datadir)
 
-    def train(self, source_sents, target_sents, cache_dir=None):
-        # TODO
-        raise NotImplementedError()
 
 class BertEmbedder(Common):
     def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size):
@@ -202,13 +199,7 @@ class BertEmbedder(Common):
             self.projection = umd(src_matrix, tgt_matrix)
 
 class VecMapEmbedder(Common):
-    def __init__(
-        self,
-        device="cuda" if cuda_is_available() else "cpu",
-        src_lang = "de",
-        tgt_lang = "en",
-        batch_size = 5000
-    ):
+    def __init__(self, device, src_lang, tgt_lang, batch_size):
         self.device = device
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -283,9 +274,9 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
-        cache_dir = str(abspath(join(dirname(__file__), 'data'))),
-        cutoff = 2000,
-        mine_batch_size = 20000,
+        datadir = str(abspath(join(dirname(__file__), 'data'))),
+        mine_ratio = 0.1,
+        mine_batch_size = 5000,
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
@@ -296,5 +287,5 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size,
-            cache_dir, cutoff, mine_batch_size, src_lang, tgt_lang)
+            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
