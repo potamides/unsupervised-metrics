@@ -3,7 +3,7 @@ from utils.wmd import word_mover_align, word_mover_score
 from utils.knn import find_nearest_neighbors, ratio_margin_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
-from utils.train import mbart_train as mt_train
+from utils.nmt import train, translate
 from torch.cuda import is_available as cuda_is_available
 from torch.nn.functional import cosine_similarity
 from os.path import isfile, join, dirname, abspath
@@ -62,11 +62,11 @@ class XMoverAligner(Common):
         sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in pairs]
         return sent_pairs, scores
 
-    def score(self, source_sents, target_sents):
+    def score(self, source_sents, target_sents, same_language=False):
         src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(source_sents,
                 target_sents)
         scores = word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
-                self.n_gram)
+                self.n_gram, same_language)
         return scores
 
 class RatioMarginAligner(Common):
@@ -101,7 +101,7 @@ class XMoverNMTAligner(XMoverAligner):
     """
 
     def __init__(self, device, use_knn, k, n_gram, knn_batch_size, datadir, mine_ratio,
-        mine_batch_size, src_lang, tgt_lang,):
+        mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio):
         super().__init__(device, use_knn, k, n_gram, knn_batch_size)
         self.datadir = datadir
         self.mine_ratio = mine_ratio
@@ -109,16 +109,20 @@ class XMoverNMTAligner(XMoverAligner):
         self.knn_batch_size = knn_batch_size
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
-
-    #Override
-    def align(self, source_sents, target_sents):
-        # TODO
-        return super().align(source_sents, target_sents)
+        self.mt_model_name = mt_model_name
+        self.translate_batch_size = translate_batch_size
+        self.ratio = ratio
+        self.mt_model = None
+        self.mt_tokenizer = None
 
     #Override
     def score(self, source_sents, target_sents):
-        # TODO
-        return super().score(source_sents, target_sents)
+        scores = super().score(source_sents, target_sents)
+        if self.mt_model is None or self.mt_tokenizer is None:
+            return scores
+        else:
+            mt_scores = super().score(self.translate(source_sents), target_sents, True)
+            return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
     def train(self, source_sents, target_sents, overwrite=True):
         file_path = join(self.datadir, f"{self.src_lang}-{self.tgt_lang}-mined.json")
@@ -146,8 +150,13 @@ class XMoverNMTAligner(XMoverAligner):
                     line = { "translation": { self.src_lang: source_sents[src], self.tgt_lang: target_sents[tgt]} }
                     f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-        self.mt_model, self.mt_tokenizer = mt_train(self.src_lang, self.tgt_lang, file_path, overwrite, self.datadir)
+        logging.info("Training MT model with pseudo parallel data.")
+        self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
+                overwrite, self.datadir)
+        self.mt_model.to(self.device)
 
+    def translate(self, sentences):
+        return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size)
 
 class BertEmbedder(Common):
     def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size):
@@ -161,7 +170,7 @@ class BertEmbedder(Common):
         self.embed_batch_size = embed_batch_size
         self.projection = None
 
-    def _embed(self, source_sents, target_sents):
+    def _embed(self, source_sents, target_sents, same_language=False):
         logging.info("Embedding source sentences with mBERT.")
         src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
                 self.tokenizer, self.device)
@@ -169,7 +178,7 @@ class BertEmbedder(Common):
         tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = bert_embed(target_sents, self.embed_batch_size, self.model,
                 self.tokenizer, self.device)
         
-        if self.projection is not None:
+        if self.projection is not None and not same_language:
             if self.mapping == 'CLP':
                 logging.info("Remap cross-lingual alignments with CLP")
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
@@ -204,16 +213,17 @@ class VecMapEmbedder(Common):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.batch_size = batch_size
-        self.de_dict = None
-        self.en_dict = None
+        self.src_dict = None
+        self.tgt_dict = None
 
-    def _embed(self, source_sents, target_sents):
-        if self.de_dict is None or self.en_dict is None:
+    def _embed(self, source_sents, target_sents, same_language=False):
+        if self.src_dict is None or self.tgt_dict is None:
             logging.info("Obtaining cross-lingual word embedding mappings from fasttext embeddings.")
-            self.de_dict, self.en_dict = map_multilingual_embeddings(self.src_lang, self.tgt_lang,
+            self.src_dict, self.tgt_dict = map_multilingual_embeddings(self.src_lang, self.tgt_lang,
                 self.batch_size, self.device)
-        src_embeddings, src_idf, src_tokens, src_mask = vecmap_embed(source_sents, self.de_dict)
-        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.en_dict)
+        src_embeddings, src_idf, src_tokens, src_mask = vecmap_embed(source_sents,
+                self.tgt_dict if same_language else self.src_dict)
+        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.tgt_dict)
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
@@ -280,12 +290,14 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
+        mt_model_name="facebook/mbart-large-cc25",
         mapping="UMD",
         do_lower_case=False,
         remap_size = 2000,
         embed_batch_size = 128,
+        ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size,
-            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang)
+            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang, mt_model_name, embed_batch_size, ratio)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)

@@ -116,12 +116,15 @@ def vecmap_tests():
 
 def nmt_tests():
     aligner = XMoverNMTBertAligner(src_lang=source_lang, tgt_lang=target_lang)
-    #mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
-    #for iteration in range(1, iterations + 1):
-    #    logging.info(f"Remapping iteration {iteration}.")
-    #    aligner.remap(mono_src, mono_tgt)
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
+    for iteration in range(1, iterations + 1):
+        logging.info(f"Remapping iteration {iteration}.")
+        aligner.remap(mono_src, mono_tgt)
+    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
     aligner.train(mono_src, mono_tgt, True)
+
+    eval_src, _, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
+    logging.info(f"Pearson correlation with NMT model: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()

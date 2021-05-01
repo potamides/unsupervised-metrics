@@ -20,6 +20,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+from torch.utils.data import DataLoader
 
 import numpy as np
 from datasets import load_dataset, load_metric
@@ -175,7 +176,7 @@ def load_model_and_tokenizer(model_name_or_path, source_lang, target_lang, use_f
 
     return model, tokenizer
 
-def train(args=None):
+def _train(args=None):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -335,13 +336,20 @@ def train(args=None):
 
     return model, tokenizer
 
-def mbart_train(source_lang, target_lang, dataset, overwrite, datadir):
-    source_lang = language2mBART(source_lang)
-    target_lang = language2mBART(target_lang)
+def train(model, source_lang, target_lang, dataset, overwrite, datadir):
+    if "mbart" in model:
+        language2mBART = {
+            "ar": "ar_AR", "cs": "cs_CZ", "de": "de_DE", "en": "en_XX", "es": "es_XX",
+            "et": "et_EE", "fi": "fi_FI", "fr": "fr_XX", "gu": "gu_IN", "hi": "hi_IN",
+            "it": "it_IT", "ja": "ja_XX", "kk": "kk_KZ", "ko": "ko_KR", "lt": "lt_LT",
+            "lv": "lv_LV", "my": "my_MM", "ne": "ne_NP", "nl": "nl_XX", "ro": "ro_RO",
+            "ru": "ru_RU", "si": "si_LK", "tr": "tr_TR", "vi": "vi_VN", "zh": "zh_CN" }
+        source_lang = language2mBART[source_lang]
+        target_lang = language2mBART[target_lang]
     args = [
-        "--model_name_or_path", "facebook/mbart-large-cc25",
-        "--cache_dir", os.path.join(datadir, f"mbart/{source_lang}-{target_lang}/cache"),
-        "--output_dir", os.path.join(datadir, f"mbart/{source_lang}-{target_lang}/output"),
+        "--model_name_or_path", model,
+        "--cache_dir", os.path.join(datadir, f"{os.path.basename(model)}/{source_lang}-{target_lang}/cache"),
+        "--output_dir", os.path.join(datadir, f"{os.path.basename(model)}/{source_lang}-{target_lang}/output"),
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,
@@ -350,15 +358,15 @@ def mbart_train(source_lang, target_lang, dataset, overwrite, datadir):
     if overwrite:
         args.append("--overwrite_output_dir")
 
-    return train(args)
+    return _train(args)
 
-def language2mBART(lang):
-    langs = { "ar": "ar_AR", "cs": "cs_CZ", "de": "de_DE", "en": "en_XX", "es": "es_XX",
-            "et": "et_EE", "fi": "fi_FI", "fr": "fr_XX", "gu": "gu_IN", "hi": "hi_IN",
-            "it": "it_IT", "ja": "ja_XX", "kk": "kk_KZ", "ko": "ko_KR", "lt": "lt_LT",
-            "lv": "lv_LV", "my": "my_MM", "ne": "ne_NP", "nl": "nl_XX", "ro": "ro_RO",
-            "ru": "ru_RU", "si": "si_LK", "tr": "tr_TR", "vi": "vi_VN", "zh": "zh_CN" }
-    return langs[lang] if lang in langs else lang
+def translate(model, tokenizer, sentences, batch_size):
+    translated = list()
+    for batch in DataLoader(sentences, batch_size=batch_size):
+        inputs = tokenizer(batch, return_tensors="pt", padding=True)
+        translated_tokens = model.generate(**inputs, decoder_start_token_id=model.config.decoder_start_token_id)
+        translated.extend(tokenizer.batch_decode(translated_tokens, skip_special_tokens=True))
+    return translated
 
 if __name__ == "__main__":
     train()
