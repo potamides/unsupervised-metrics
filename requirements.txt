@@ -6,4 +6,3 @@ datasets==1.6.1
 cupy-cuda100==8.5.0
 nltk==3.5
 sentencepiece==0.1.95
-sacrebleu==1.5.1

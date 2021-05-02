@@ -121,7 +121,7 @@ def nmt_tests():
         logging.info(f"Remapping iteration {iteration}.")
         aligner.remap(mono_src, mono_tgt)
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
-    aligner.train(mono_src, mono_tgt, True)
+    aligner.train(mono_src, mono_tgt, False)
 
     eval_src, _, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
     logging.info(f"Pearson correlation with NMT model: {aligner.correlation(eval_src, eval_system, eval_scores)}.")

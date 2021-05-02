@@ -23,7 +23,7 @@ from typing import Optional
 from torch.utils.data import DataLoader
 
 import numpy as np
-from datasets import load_dataset, load_metric
+from datasets import load_dataset
 
 from transformers import (
     AutoConfig,
@@ -274,37 +274,6 @@ def _train(args=None):
             label_pad_token_id=label_pad_token_id,
             pad_to_multiple_of=8 if training_args.fp16 else None,
         )
-
-    # Metric
-    metric = load_metric("sacrebleu")
-
-    def postprocess_text(preds, labels):
-        preds = [pred.strip() for pred in preds]
-        labels = [[label.strip()] for label in labels]
-
-        return preds, labels
-
-    def compute_metrics(eval_preds):
-        preds, labels = eval_preds
-        if isinstance(preds, tuple):
-            preds = preds[0]
-        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        if data_args.ignore_pad_token_for_loss:
-            # Replace -100 in the labels as we can't decode them.
-            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-        # Some simple post-processing
-        decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels)
-        result = {"bleu": result["score"]}
-
-        prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
-        result["gen_len"] = np.mean(prediction_lens)
-        result = {k: round(v, 4) for k, v in result.items()}
-        return result
-
     # Initialize our Trainer
     trainer = Seq2SeqTrainer(
         model=model,
@@ -312,7 +281,6 @@ def _train(args=None):
         train_dataset=train_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics if training_args.predict_with_generate else None,
     )
 
     # Training
@@ -323,7 +291,7 @@ def _train(args=None):
     else:
         checkpoint = None
     train_result = trainer.train(resume_from_checkpoint=checkpoint)
-    trainer.save_model(training_args.output_dir)  # Saves the tokenizer too for easy upload
+    trainer.save_model(training_args.output_dir)  # Saves the tokenizer too
 
     metrics = train_result.metrics
     max_train_samples = (
@@ -353,8 +321,8 @@ def train(model, source_lang, target_lang, dataset, overwrite, datadir):
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,
-        "--per_device_train_batch_size", "4",
-        "--predict_with_generate", "--do_train"]
+        "--save_strategy", "epoch",
+        "--per_device_train_batch_size", "4", "--do_train"]
     if overwrite:
         args.append("--overwrite_output_dir")
 
