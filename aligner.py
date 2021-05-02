@@ -296,9 +296,10 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         do_lower_case=False,
         remap_size = 2000,
         embed_batch_size = 128,
+        translate_batch_size = 16,
         ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size,
-            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang, mt_model_name, embed_batch_size, ratio)
+            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
