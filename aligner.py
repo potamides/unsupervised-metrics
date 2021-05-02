@@ -64,9 +64,9 @@ class XMoverAligner(Common):
 
     def score(self, source_sents, target_sents, same_language=False):
         src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(source_sents,
-                target_sents)
+                target_sents, same_language)
         scores = word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
-                self.n_gram, same_language)
+                self.n_gram)
         return scores
 
 class RatioMarginAligner(Common):
@@ -156,6 +156,7 @@ class XMoverNMTAligner(XMoverAligner):
         self.mt_model.to(self.device)
 
     def translate(self, sentences):
+        logging.info("Translating sentences into target language.")
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size)
 
 class BertEmbedder(Common):
