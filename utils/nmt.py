@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 from torch.utils.data import DataLoader
 
-import numpy as np
 from datasets import load_dataset
 
 from transformers import (
@@ -328,12 +327,13 @@ def train(model, source_lang, target_lang, dataset, overwrite, datadir):
 
     return _train(args)
 
-def translate(model, tokenizer, sentences, batch_size):
+def translate(model, tokenizer, sentences, batch_size, device):
     translated = list()
     for batch in DataLoader(sentences, batch_size=batch_size):
         inputs = tokenizer(batch, return_tensors="pt", padding=True)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         translated_tokens = model.generate(**inputs, decoder_start_token_id=model.config.decoder_start_token_id)
-        translated.extend(tokenizer.batch_decode(translated_tokens, skip_special_tokens=True))
+        translated.extend(tokenizer.batch_decode(translated_tokens.cpu(), skip_special_tokens=True))
     return translated
 
 if __name__ == "__main__":

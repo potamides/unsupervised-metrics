@@ -157,7 +157,7 @@ class XMoverNMTAligner(XMoverAligner):
 
     def translate(self, sentences):
         logging.info("Translating sentences into target language.")
-        return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size)
+        return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class BertEmbedder(Common):
     def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size):
