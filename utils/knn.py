@@ -12,7 +12,7 @@ def knn_sharded(source_data, target_data, k, batch_size, device):
         bsims, binds = [], []
         for y_batch in np.array_split(faiss.normalize_L2(target_data), np.ceil(len(target_data) / batch_size)):
             neighbor_size = min(k, y_batch.shape[0])
-            idx = faiss.IndexFlatIP(dim)
+            idx = faiss.IndexFlatL2(dim)
             if device != 'cpu':
                 idx = faiss.index_cpu_to_all_gpus(idx)
             idx.add(y_batch)
