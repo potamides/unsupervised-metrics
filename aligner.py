@@ -5,11 +5,11 @@ from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
 from torch.cuda import is_available as cuda_is_available
-from torch.nn.functional import cosine_similarity
+from torch.nn.functional import cosine_similarity, mse_loss, l1_loss
 from os.path import isfile, join, dirname, abspath
 from json import dumps
 from math import ceil
-from numpy import corrcoef
+from numpy import corrcoef, argsort
 from itertools import islice
 from abc import ABC, abstractmethod
 import logging
@@ -29,12 +29,28 @@ class Common(ABC):
         pass
 
     def precision(self, source_sents, ref_sents):
+        """
+        Computes Precision @ 1 scores.
+        """
         pairs, _ = self.align(source_sents, ref_sents)
         return sum([reference == predicted for reference, (_, predicted) in zip(ref_sents, pairs)]) / len(ref_sents)
 
     def correlation(self, source_sents, system_sents, ref_scores):
+        """
+        Computes Pearson and Spearman correlation coefficients.
+        """
         scores = self.score(source_sents, system_sents)
-        return corrcoef(ref_scores, scores)[0,1]
+        ref_ranks, ranks = argsort(ref_scores).argsort(), argsort(scores).argsort()
+        return corrcoef(ref_scores, scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
+
+    def error(self, source_sents, system_sents, ref_scores):
+        """
+        Computes Mean Absolute Error and Root Mean Squared Error.
+        """
+        scores = self.score(source_sents, system_sents)
+        rmse = mse_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).sqrt()
+        mae = l1_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores))
+        return rmse, mae
 
 class XMoverAligner(Common):
     def __init__(self, device, use_knn, k, n_gram, knn_batch_size):

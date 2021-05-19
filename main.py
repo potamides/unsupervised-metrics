@@ -122,13 +122,14 @@ def bert_tests(use_ratio_margin=False):
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
     eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
 
-    logging.info(f"Precision @ 1 before remapping: {aligner.precision(parallel_src, parallel_tgt)}.")
-    logging.info(f"Pearson correlation before remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+    logging.info("Evaluating performance before remapping.")
+    logging.info(f"Precision @ 1: {aligner.precision(parallel_src, parallel_tgt)}")
+    logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
     for iteration in range(1, iterations + 1):
         logging.info(f"Remapping iteration {iteration}.")
         aligner.remap(mono_src, mono_tgt)
-        logging.info(f"Precision @ 1 after remapping: {aligner.precision(parallel_src, parallel_tgt)}")
-        logging.info(f"Pearson correlation after remapping: {aligner.correlation(eval_src, eval_system, eval_scores)}")
+        logging.info(f"Precision @ 1: {aligner.precision(parallel_src, parallel_tgt)}")
+        logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
   
 def vecmap_tests():
     aligner = XMoverVecMapAligner(src_lang=source_lang, tgt_lang=target_lang)
@@ -136,19 +137,27 @@ def vecmap_tests():
     eval_src, eval_system, eval_scores = extract_dataset(tokenize, "scored")
 
     logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
-    logging.info(f"Pearson: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+    logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
 
 def nmt_tests():
     aligner = XMoverNMTBertAligner(src_lang=source_lang, tgt_lang=target_lang)
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
+    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored", use_mlqe=True)
+
+    logging.info("Evaluating performance before remapping.")
+    logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
+    logging.info("RMSE: {}, MAE: {}".format(*aligner.error(eval_src, eval_system, eval_scores)))
     for iteration in range(1, iterations + 1):
         logging.info(f"Remapping iteration {iteration}.")
         aligner.remap(mono_src, mono_tgt)
+        logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
+        logging.info("RMSE: {}, MAE: {}".format(*aligner.error(eval_src, eval_system, eval_scores)))
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
     aligner.train(mono_src, mono_tgt, False)
 
-    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
-    logging.info(f"Pearson correlation with NMT model: {aligner.correlation(eval_src, eval_system, eval_scores)}.")
+    logging.info("Evaluating performance with NMT model.")
+    logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
+    logging.info("RMSE: {}, MAE: {}".format(*aligner.error(eval_src, eval_system, eval_scores)))
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 download_datasets()
