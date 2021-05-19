@@ -64,7 +64,6 @@ def download_datasets():
                 fileversion = filename.format(version)
                 if not isfile(join(dataset["path"], fileversion)):
                     try:
-                        logging.info(f"Downloading {fileversion} dataset.")
                         urlretrieve(join(url, fileversion), join(dataset["path"], fileversion))
                         logging.info(f"Downloaded {fileversion} dataset.")
                         break
