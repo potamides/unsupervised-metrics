@@ -12,13 +12,14 @@ from nltk import tokenize
 from io import TextIOWrapper
 import logging
 
-source_lang, target_lang = "en", "de"
-iterations = 5
+source_lang, target_lang = "en", "ro"
+iterations = 1
 max_monolingual_sent_len = 80
 
 monolingual_data = {
-    "filenames": (f"news.2007.{source_lang}.shuffled.deduped.gz", f"news.2007.{target_lang}.shuffled.deduped.gz"),
+    "filenames": (f"news.{{}}.{source_lang}.shuffled.deduped.gz", f"news.{{}}.{target_lang}.shuffled.deduped.gz"),
     "urls": (f"http://data.statmt.org/news-crawl/{source_lang}", f"http://data.statmt.org/news-crawl/{target_lang}"),
+    "versions": list(range(2007, 2020)),
     "samples": 20000,
     "path": str(Path(__file__).parent / "data")
 }
@@ -58,12 +59,19 @@ def download_datasets():
         else:
             identifiers = zip(dataset["filenames"], dataset["urls"])
         for filename, url in identifiers:
-            if not isfile(join(dataset["path"], filename)):
-                try:
-                    urlretrieve(join(url, filename), join(dataset["path"], filename))
-                    logging.info(f"Downloaded {filename} dataset.")
-                except URLError:
-                    pass
+            # find first version that exists
+            for version in dataset.get("versions", [None]):
+                fileversion = filename.format(version)
+                if not isfile(join(dataset["path"], fileversion)):
+                    try:
+                        logging.info(f"Downloading {fileversion} dataset.")
+                        urlretrieve(join(url, fileversion), join(dataset["path"], fileversion))
+                        logging.info(f"Downloaded {fileversion} dataset.")
+                        break
+                    except URLError:
+                        pass
+                else:
+                    break
 
 def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
     if type_ == "parallel":
@@ -78,8 +86,12 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
 
     elif type_ == "monolingual":
         mono_source, mono_target= list(), list()
-        mpath, mfilenames = monolingual_data["path"], monolingual_data["filenames"]
-        with gopen(join(mpath, mfilenames[0]), "rt") as f, gopen(join(mpath, mfilenames[1]), "rt") as g:
+        mpath, mfiles, versions = monolingual_data["path"], monolingual_data["filenames"], monolingual_data["versions"]
+        src_paths = [join(mpath, mfiles[0].format(version)) for version in versions]
+        tgt_paths = [join(mpath, mfiles[1].format(version)) for version in versions]
+        src_path = next((path for path in src_paths if isfile(path)))
+        tgt_path = next((path for path in tgt_paths if isfile(path)))
+        with gopen(src_path, "rt") as f, gopen(tgt_path, "rt") as g:
             collected_src_samples, collected_tgt_samples = 0, 0
             for src in f:
                 if len(tokenize(src)) < max_monolingual_sent_len:
