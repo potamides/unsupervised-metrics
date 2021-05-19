@@ -12,7 +12,7 @@ from nltk import tokenize
 from io import TextIOWrapper
 import logging
 
-source_lang, target_lang = "en", "ro"
+source_lang, target_lang = "ro", "en"
 iterations = 1
 max_monolingual_sent_len = 80
 
