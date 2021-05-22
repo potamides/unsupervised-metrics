@@ -150,7 +150,7 @@ class XMoverNMTAligner(XMoverAligner):
             while idx < max(len(source_sents), len(target_sents)):
                 logging.info(f"Embedding sentences (batch {int(idx / self.mine_batch_size) + 1}/{batches}).")
                 src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
-                        source_sents[idx:idx + self.mine_batch_size], target_sents[idx:idx + self.mine_batch_size])
+                    source_sents[idx:idx + self.mine_batch_size], target_sents[idx:idx + self.mine_batch_size])
                 if len(src_embeddings) > 0:
                     source_sent_embeddings.append(torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1))
                 if len(tgt_embeddings) > 0:
@@ -158,22 +158,24 @@ class XMoverNMTAligner(XMoverAligner):
                 idx += self.mine_batch_size
 
             logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-            candidates, _, idx = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
-                    self.k_mine, self.knn_batch_size, self.device), 0
-            logging.info("Computing exact Word Mover Distances for candidates.")
-            pairs = list()
+            candidates, idx = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
+                self.k_mine, self.knn_batch_size, self.device)[0], 0
+            logging.info("Computing exact Word Mover's Distances for candidates.")
+            pairs, scores = list(), list()
             while idx < len(source_sents):
                 src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(
                     source_sents[idx:idx + self.mine_batch_size],
                     [target_sents[candidate] for candidate in candidates[idx:idx + self.mine_batch_size].flatten()])
-                tmp, _ = word_mover_align((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
-                    self.n_gram, arange(self.mine_batch_size * self.k_mine).reshape(self.mine_batch_size, self.k_mine))
-                pairs.extend([(src, candidates.flatten()[tgt]) for src, tgt in tmp])
+                batch_pairs, batch_scores = word_mover_align((src_embeddings, src_idf, src_tokens),
+                    (tgt_embeddings, tgt_idf, tgt_tokens), self.n_gram,
+                    arange(len(src_embeddings) * self.k_mine).reshape(len(src_embeddings), self.k_mine))
+                pairs.extend([(src, candidates.flatten()[tgt]) for src, tgt in batch_pairs])
+                scores.extend(batch_scores)
                 idx += self.mine_batch_size
 
             with open(file_path, "wb") as f:
                 cutoff = round(self.mine_ratio * len(pairs))
-                for (src, tgt) in islice(pairs, cutoff):
+                for _, (src, tgt) in islice(sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True), cutoff):
                     line = { "translation": { self.src_lang: source_sents[src], self.tgt_lang: target_sents[tgt]} }
                     f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
