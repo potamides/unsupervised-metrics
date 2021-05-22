@@ -1,7 +1,9 @@
-import faiss
+from faiss import IndexFlatL2, IndexFlatIP, index_cpu_to_all_gpus, normalize_L2 
 import numpy as np
 
-def knn_sharded(source_data, target_data, k, batch_size, device):
+def knn_sharded(source_data, target_data, k, batch_size, device, use_cosine=False):
+    source_data = normalize_L2(source_data) if use_cosine else source_data
+    target_data = normalize_L2(target_data) if use_cosine else target_data
     sims = []
     inds = []
     dim = source_data.shape[-1]
@@ -12,9 +14,9 @@ def knn_sharded(source_data, target_data, k, batch_size, device):
         bsims, binds = [], []
         for y_batch in np.array_split(faiss.normalize_L2(target_data), np.ceil(len(target_data) / batch_size)):
             neighbor_size = min(k, y_batch.shape[0])
-            idx = faiss.IndexFlatL2(dim)
+            idx = IndexFlatIP(dim) if use_cosine else IndexFlatL2(dim)
             if device != 'cpu':
-                idx = faiss.index_cpu_to_all_gpus(idx)
+                idx = index_cpu_to_all_gpus(idx)
             idx.add(y_batch)
             bsim, bind = idx.search(x_batch, neighbor_size)
 
@@ -49,7 +51,7 @@ def score_candidates(sim_mat, candidate_inds, fwd_mean, bwd_mean):
     return scores
 
 def ratio_margin_align(source_data, target_data, k, batch_size, device):
-    src2tgt_sim, src2tgt_ind = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
+    src2tgt_sim, src2tgt_ind = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device, True)
     tgt2src_sim, _ = knn_sharded(target_data.numpy(), source_data.numpy(), k, batch_size, device)
 
     src2tgt_mean = src2tgt_sim.mean(axis=1)
@@ -57,8 +59,8 @@ def ratio_margin_align(source_data, target_data, k, batch_size, device):
     fwd_scores = score_candidates(src2tgt_sim, src2tgt_ind, src2tgt_mean, tgt2src_mean)
     fwd_best = src2tgt_ind[np.arange(src2tgt_sim.shape[0]), fwd_scores.argmax(axis=1)]
 
-    return list(enumerate(fwd_best)), fwd_scores.max(axis=1)
+    return fwd_best, fwd_scores.max(axis=1)
 
-def find_nearest_neighbors(source_data, target_data, k, batch_size, device):
-    _, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
-    return indeces
+def wcd_align(source_data, target_data, k, batch_size, device):
+    squared_scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
+    return indeces, np.sqrt(squared_scores)

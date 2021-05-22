@@ -1,6 +1,6 @@
 from transformers import BertModel, BertTokenizer, BertConfig
 from utils.wmd import word_mover_align, word_mover_score
-from utils.knn import find_nearest_neighbors, ratio_margin_align
+from utils.knn import wcd_align, ratio_margin_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
@@ -9,7 +9,7 @@ from torch.nn.functional import cosine_similarity, mse_loss, l1_loss
 from os.path import isfile, join, dirname, abspath
 from json import dumps
 from math import ceil
-from numpy import corrcoef, argsort
+from numpy import corrcoef, argsort, arange
 from itertools import islice
 from abc import ABC, abstractmethod
 import logging
@@ -69,7 +69,7 @@ class XMoverAligner(Common):
             logging.info("Finding nearest neighbors with KNN algorithm.")
             source_sent_embeddings = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
             target_sent_embeddings = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
-            candidates = find_nearest_neighbors(source_sent_embeddings, target_sent_embeddings, self.k,
+            candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, self.k,
                     self.knn_batch_size, self.device)
 
         logging.info("Computing word mover scores.")
@@ -98,10 +98,10 @@ class RatioMarginAligner(Common):
         logging.info("Computing scores with Ratio Margin algorithm.")
         source_sent_embeddings = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
         target_sent_embeddings = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
-        pairs, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
+        indeces, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
                 self.knn_batch_size, self.device)
 
-        sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in pairs]
+        sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in enumerate(indeces)]
         return sent_pairs, scores
 
     def score(self, source_sents, target_sents):
@@ -116,9 +116,10 @@ class XMoverNMTAligner(XMoverAligner):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(self, device, use_knn, k, n_gram, knn_batch_size, datadir, mine_ratio,
+    def __init__(self, device, use_knn, k_align, k_mine, n_gram, knn_batch_size, datadir, mine_ratio,
         mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio):
-        super().__init__(device, use_knn, k, n_gram, knn_batch_size)
+        super().__init__(device, use_knn, k_align, n_gram, knn_batch_size)
+        self.k_mine = k_mine
         self.datadir = datadir
         self.mine_ratio = mine_ratio
         self.mine_batch_size = mine_batch_size
@@ -156,13 +157,23 @@ class XMoverNMTAligner(XMoverAligner):
                     target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
                 idx += self.mine_batch_size
 
-            logging.info("Mining pseudo parallel data with Ratio Margin function.")
-            pairs, scores = ratio_margin_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
-                    self.k, self.knn_batch_size, self.device)
+            logging.info("Mining pseudo parallel data using Word Centroid Distance.")
+            candidates, _, idx = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
+                    self.k_mine, self.knn_batch_size, self.device), 0
+            logging.info("Computing exact Word Mover Distances for candidates.")
+            pairs = list()
+            while idx < len(source_sents):
+                src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(
+                    source_sents[idx:idx + self.mine_batch_size],
+                    [target_sents[candidate] for candidate in candidates[idx:idx + self.mine_batch_size].flatten()])
+                tmp, _ = word_mover_align((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
+                    self.n_gram, arange(self.mine_batch_size * self.k_mine).reshape(self.mine_batch_size, self.k_mine))
+                pairs.extend([(src, candidates.flatten()[tgt]) for src, tgt in tmp])
+                idx += self.mine_batch_size
 
             with open(file_path, "wb") as f:
                 cutoff = round(self.mine_ratio * len(pairs))
-                for _, (src, tgt) in islice(sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True), cutoff):
+                for (src, tgt) in islice(pairs, cutoff):
                     line = { "translation": { self.src_lang: source_sents[src], self.tgt_lang: target_sents[tgt]} }
                     f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
@@ -298,7 +309,8 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         self,
         device="cuda" if cuda_is_available() else "cpu",
         use_knn = True,
-        k = 20,
+        k_align = 20,
+        k_mine = 1,
         n_gram = 1,
         knn_batch_size = 1000000,
         datadir = str(abspath(join(dirname(__file__), 'data'))),
@@ -316,6 +328,6 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverNMTAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size,
+        XMoverNMTAligner.__init__(self, device, use_knn, k_align, k_mine, n_gram, knn_batch_size,
             datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
