@@ -169,7 +169,7 @@ class XMoverNMTAligner(XMoverAligner):
                 batch_pairs, batch_scores = word_mover_align((src_embeddings, src_idf, src_tokens),
                     (tgt_embeddings, tgt_idf, tgt_tokens), self.n_gram,
                     arange(len(src_embeddings) * self.k_mine).reshape(len(src_embeddings), self.k_mine))
-                pairs.extend([(src, candidates.flatten()[tgt]) for src, tgt in batch_pairs])
+                pairs.extend([(src + idx, candidates[idx:idx + self.mine_batch_size].flatten()[tgt]) for src, tgt in batch_pairs])
                 scores.extend(batch_scores)
                 idx += self.mine_batch_size
 
