@@ -9,10 +9,10 @@ def knn_sharded(source_data, target_data, k, batch_size, device, use_cosine=Fals
     dim = source_data.shape[-1]
     xfrom = 0
 
-    for x_batch in np.array_split(faiss.normalize_L2(source_data), np.ceil(len(source_data) / batch_size)):
+    for x_batch in np.array_split(source_data, np.ceil(len(source_data) / batch_size)):
         yfrom = 0
         bsims, binds = [], []
-        for y_batch in np.array_split(faiss.normalize_L2(target_data), np.ceil(len(target_data) / batch_size)):
+        for y_batch in np.array_split(target_data, np.ceil(len(target_data) / batch_size)):
             neighbor_size = min(k, y_batch.shape[0])
             idx = IndexFlatIP(dim) if use_cosine else IndexFlatL2(dim)
             if device != 'cpu':
