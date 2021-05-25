@@ -12,8 +12,8 @@ from nltk import tokenize
 from io import TextIOWrapper
 import logging
 
-source_lang, target_lang = "ro", "en"
-iterations = 1
+source_lang, target_lang = "de", "en"
+iterations = 5
 max_monolingual_sent_len = 80
 
 monolingual_data = {
@@ -34,15 +34,10 @@ parallel_data = {
     "path": str(Path(__file__).parent / "data")
 }
 news_eval_data = {
-    "filename": "DAseg-wmt-newstest2016.tar.gz",
-    "url": "http://www.computing.dcu.ie/~ygraham",
+    "filename": f"testset_{source_lang}-{target_lang}.tsv",
+    "url": "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/WMT17/testset",
     "samples": 560,
     "path": str(Path(__file__).parent / "data"),
-    "members": (
-        f"DAseg-wmt-newstest2016/DAseg.newstest2016.source.{source_lang}-{target_lang}",
-        f"DAseg-wmt-newstest2016/DAseg.newstest2016.mt-system.{source_lang}-{target_lang}",
-        f"DAseg-wmt-newstest2016/DAseg.newstest2016.human.{source_lang}-{target_lang}",
-    )
 }
 mlqe_eval_data = {
     "filename": f"{source_lang}-{target_lang}-test.tar.gz",
@@ -117,12 +112,12 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
                     eval_system.append(mt.strip())
                     eval_scores.append(float(score))
         else:
-            samples, members = news_eval_data["samples"], news_eval_data["members"]
-            with topen(join(news_eval_data["path"], news_eval_data["filename"]), 'r:gz') as tf:
-                for src, mt, score in zip(*map(lambda x: islice(tf.extractfile(x), samples), members)):
-                    eval_source.append(src.decode().strip())
-                    eval_system.append(mt.decode().strip())
-                    eval_scores.append(float(score.decode()))
+            with open(join(news_eval_data["path"], news_eval_data["filename"]), newline='') as f:
+                tsvdata = reader(f, delimiter="\t", quoting=QUOTE_NONE)
+                for _, src, mt, _, score, _ in islice(tsvdata, 1, news_eval_data["samples"] + 1):
+                    eval_source.append(src.strip())
+                    eval_system.append(mt.strip())
+                    eval_scores.append(float(score))
         return eval_source, eval_system, eval_scores
     else:
         raise ValueError(f"{type_} is not a valid type!")
@@ -153,7 +148,7 @@ def vecmap_tests():
 def nmt_tests():
     aligner = XMoverNMTBertAligner(src_lang=source_lang, tgt_lang=target_lang)
     mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
-    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored", use_mlqe=True)
+    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
 
     logging.info("Evaluating performance before remapping.")
     logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
