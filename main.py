@@ -117,8 +117,8 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
                 tsvdata = reader(f, delimiter="\t", quoting=QUOTE_NONE)
                 with MosesDetokenizer(source_lang) as src_detokenize, MosesDetokenizer(target_lang) as tgt_detokenize:        
                     for _, src, mt, _, score, _ in islice(tsvdata, 1, news_eval_data["samples"] + 1):
-                        eval_source.append(src_detokenize(src.split(' ')))
-                        eval_system.append(tgt_detokenize(src.split(' ')))
+                        eval_source.append(src_detokenize(src.split()))
+                        eval_system.append(tgt_detokenize(mt.split()))
                         eval_scores.append(float(score))
         return eval_source, eval_system, eval_scores
     else:
