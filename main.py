@@ -10,6 +10,7 @@ from urllib.error import URLError
 from pathlib import Path
 from nltk import tokenize
 from io import TextIOWrapper
+from mosestokenizer import MosesDetokenizer
 import logging
 
 source_lang, target_lang = "de", "en"
@@ -114,10 +115,11 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
         else:
             with open(join(news_eval_data["path"], news_eval_data["filename"]), newline='') as f:
                 tsvdata = reader(f, delimiter="\t", quoting=QUOTE_NONE)
-                for _, src, mt, _, score, _ in islice(tsvdata, 1, news_eval_data["samples"] + 1):
-                    eval_source.append(src.strip())
-                    eval_system.append(mt.strip())
-                    eval_scores.append(float(score))
+                with MosesDetokenizer(source_lang) as src_detokenize, MosesDetokenizer(target_lang) as tgt_detokenize:        
+                    for _, src, mt, _, score, _ in islice(tsvdata, 1, news_eval_data["samples"] + 1):
+                        eval_source.append(src_detokenize(src.split(' ')))
+                        eval_system.append(tgt_detokenize(src.split(' ')))
+                        eval_scores.append(float(score))
         return eval_source, eval_system, eval_scores
     else:
         raise ValueError(f"{type_} is not a valid type!")
