@@ -1,6 +1,6 @@
 from transformers import BertModel, BertTokenizer, BertConfig
 from utils.wmd import word_mover_align, word_mover_score
-from utils.knn import wcd_align, ratio_margin_align
+from utils.knn import wcd_align, ratio_margin_align, cosine_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
@@ -11,6 +11,7 @@ from json import dumps
 from math import ceil
 from numpy import corrcoef, argsort, arange
 from itertools import islice
+from nltk.metrics.distance import edit_distance
 from abc import ABC, abstractmethod
 import logging
 import torch
@@ -53,28 +54,55 @@ class Common(ABC):
         return rmse, mae
 
 class XMoverAligner(Common):
-    def __init__(self, device, use_knn, k, n_gram, knn_batch_size):
+    def __init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size):
         self.device = device
-        self.use_knn = use_knn
         self.k = k
         self.n_gram = n_gram
         self.knn_batch_size = knn_batch_size
+        self.use_cosine = use_cosine
+        self.align_batch_size = align_batch_size
+
+    def _mean_pool_embed(self, source_sents, target_sents):
+        source_sent_embeddings, target_sent_embeddings, idx  = list(), list(), 0
+        while idx < max(len(source_sents), len(target_sents)):
+            src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
+                source_sents[idx:idx + self.align_batch_size], target_sents[idx:idx + self.align_batch_size])
+            if len(src_embeddings) > 0:
+                source_sent_embeddings.append(torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1))
+            if len(tgt_embeddings) > 0:
+                target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
+            idx += self.align_batch_size
+
+        return source_sent_embeddings, target_sent_embeddings
+
+    def _memory_efficient_word_mover_align(self, source_sents, target_sents, candidates):
+        pairs, scores, idx, k = list(), list(), 0, candidates.shape[1]
+        while idx < len(source_sents):
+            src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(
+                source_sents[idx:idx + self.align_batch_size],
+                [target_sents[candidate] for candidate in candidates[idx:idx + self.align_batch_size].flatten()])
+            batch_pairs, batch_scores = word_mover_align((src_embeddings, src_idf, src_tokens),
+                (tgt_embeddings, tgt_idf, tgt_tokens), self.n_gram,
+                arange(len(src_embeddings) * k).reshape(len(src_embeddings), k))
+            pairs.extend([(src + idx, candidates[idx:idx + self.align_batch_size].flatten()[tgt]) for src, tgt in batch_pairs])
+            scores.extend(batch_scores)
+            idx += self.align_batch_size
+        return pairs, scores
 
     def align(self, source_sents, target_sents):
-        src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = self._embed(
-                source_sents, target_sents)
-
         candidates = None
-        if self.use_knn:
-            logging.info("Finding nearest neighbors with KNN algorithm.")
-            source_sent_embeddings = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
-            target_sent_embeddings = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
+        logging.info("Obtaining sentence embeddings.")
+        source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(source_sents, target_sents)
+        logging.info("Searching for nearest neighbors.")
+        if self.use_cosine:
+            candidates, _ = cosine_align(source_sent_embeddings, target_sent_embeddings, self.k,
+                    self.knn_batch_size, self.device)
+        else:
             candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, self.k,
                     self.knn_batch_size, self.device)
 
-        logging.info("Computing word mover scores.")
-        pairs, scores = word_mover_align((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
-                self.n_gram, candidates)
+        logging.info("Filter best nearest neighbors with Word Mover's Distance.")
+        pairs, scores = self._memory_efficient_word_mover_align(source_sents, target_sents, candidates)
         sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in pairs]
         return sent_pairs, scores
 
@@ -116,13 +144,11 @@ class XMoverNMTAligner(XMoverAligner):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(self, device, use_knn, k_align, k_mine, n_gram, knn_batch_size, datadir, mine_ratio,
-        mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio):
-        super().__init__(device, use_knn, k_align, n_gram, knn_batch_size)
-        self.k_mine = k_mine
+    def __init__(self, device, k, n_gram, knn_batch_size, datadir, train_size,
+        align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine):
+        super().__init__(device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         self.datadir = datadir
-        self.mine_ratio = mine_ratio
-        self.mine_batch_size = mine_batch_size
+        self.train_size = train_size
         self.knn_batch_size = knn_batch_size
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
@@ -131,6 +157,7 @@ class XMoverNMTAligner(XMoverAligner):
         self.ratio = ratio
         self.mt_model = None
         self.mt_tokenizer = None
+        self.use_cosine = use_cosine
 
     #Override
     def score(self, source_sents, target_sents):
@@ -141,44 +168,32 @@ class XMoverNMTAligner(XMoverAligner):
             mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, overwrite=True):
-        file_path = join(self.datadir, f"{self.src_lang}-{self.tgt_lang}-mined.json")
-
+    def train(self, source_sents, target_sents, overwrite=True, k=1):
+        file_path, pairs, scores = join(self.datadir, f"{self.src_lang}-{self.tgt_lang}-mined.json"), list(), list()
         if not isfile(file_path) or overwrite:
-            source_sent_embeddings, target_sent_embeddings, idx  = list(), list(), 0
-            batches = ceil(max(len(source_sents), len(target_sents)) / self.mine_batch_size)
-            while idx < max(len(source_sents), len(target_sents)):
-                logging.info(f"Embedding sentences (batch {int(idx / self.mine_batch_size) + 1}/{batches}).")
-                src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
-                    source_sents[idx:idx + self.mine_batch_size], target_sents[idx:idx + self.mine_batch_size])
-                if len(src_embeddings) > 0:
-                    source_sent_embeddings.append(torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1))
-                if len(tgt_embeddings) > 0:
-                    target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
-                idx += self.mine_batch_size
-
-            logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-            candidates, idx = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
-                self.k_mine, self.knn_batch_size, self.device)[0], 0
-            logging.info("Computing exact Word Mover's Distances for candidates.")
+            logging.info("Obtaining sentence embeddings.")
+            source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(source_sents, target_sents)
             pairs, scores = list(), list()
-            while idx < len(source_sents):
-                src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(
-                    source_sents[idx:idx + self.mine_batch_size],
-                    [target_sents[candidate] for candidate in candidates[idx:idx + self.mine_batch_size].flatten()])
-                batch_pairs, batch_scores = word_mover_align((src_embeddings, src_idf, src_tokens),
-                    (tgt_embeddings, tgt_idf, tgt_tokens), self.n_gram,
-                    arange(len(src_embeddings) * self.k_mine).reshape(len(src_embeddings), self.k_mine))
-                pairs.extend([(src + idx, candidates[idx:idx + self.mine_batch_size].flatten()[tgt]) for src, tgt in batch_pairs])
-                scores.extend(batch_scores)
-                idx += self.mine_batch_size
-
-            with open(file_path, "wb") as f:
-                cutoff = round(self.mine_ratio * len(pairs))
-                for _, (src, tgt) in islice(sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True), cutoff):
-                    line = { "translation": { self.src_lang: source_sents[src], self.tgt_lang: target_sents[tgt]} }
+            if self.use_cosine:
+                logging.info("Mining pseudo parallel data with Ratio Margin function.")
+                pairs, scores = ratio_margin_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
+                        self.k, self.knn_batch_size, self.device)
+            else:
+                logging.info("Mining pseudo parallel data using Word Centroid Distance.")
+                candidates = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings), k,
+                    self.knn_batch_size, self.device)[0]
+                logging.info("Computing exact Word Mover's Distances for candidates.")
+                pairs, scores = self._memory_efficient_word_mover_align(source_sents, target_sents, candidates)
+        with open(file_path, "wb") as f:
+            idx = 0
+            for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
+                src_sent, tgt_sent = source_sents[src], target_sents[tgt]
+                if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
+                    line = { "translation": { self.src_lang: src_sent, self.tgt_lang: tgt_sent} }
                     f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
-
+                    idx += 1
+                if idx >= self.train_size:
+                    break
         logging.info("Training MT model with pseudo parallel data.")
         self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
                 overwrite, self.datadir)
@@ -225,7 +240,8 @@ class BertEmbedder(Common):
         sent_pairs, scores = self.align(source_sents, target_sents)
         sorted_sent_pairs = list()
         for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
-            sorted_sent_pairs.append((src_sent, tgt_sent))
+            if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
+                sorted_sent_pairs.append((src_sent, tgt_sent))
 
         tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
@@ -252,8 +268,8 @@ class VecMapEmbedder(Common):
             self.src_dict, self.tgt_dict = map_multilingual_embeddings(self.src_lang, self.tgt_lang,
                 self.batch_size, self.device)
         src_embeddings, src_idf, src_tokens, src_mask = vecmap_embed(source_sents,
-                self.tgt_dict if same_language else self.src_dict)
-        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.tgt_dict)
+                *((self.tgt_dict, self.tgt_lang) if same_language else (self.src_dict, self.src_lang)))
+        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.tgt_dict, self.tgt_lang)
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
@@ -264,15 +280,16 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
-        use_knn = True,
+        use_cosine = False,
         k = 20,
         n_gram = 1,
-        remap_size = 2000,
+        remap_size = 3000,
         embed_batch_size = 128,
-        knn_batch_size = 1000000
+        knn_batch_size = 1000000,
+        align_batch_size = 5000
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size)
+        XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
 
 class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
@@ -283,7 +300,7 @@ class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
         k = 20,
-        remap_size = 2000,
+        remap_size = 3000,
         embed_batch_size = 128,
         knn_batch_size = 1000000
     ):
@@ -294,42 +311,42 @@ class XMoverVecMapAligner(XMoverAligner, VecMapEmbedder):
     def __init__(
         self,
         device="cuda" if cuda_is_available() else "cpu",
-        use_knn = True,
+        use_cosine = False,
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
         src_lang = "de",
         tgt_lang = "en",
-        batch_size = 5000
+        batch_size = 5000,
+        align_batch_size = 5000
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverAligner.__init__(self, device, use_knn, k, n_gram, knn_batch_size)
+        XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         VecMapEmbedder.__init__(self, device, src_lang, tgt_lang, batch_size)
 
 class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
     def __init__(
         self,
         device="cuda" if cuda_is_available() else "cpu",
-        use_knn = True,
-        k_align = 20,
-        k_mine = 1,
+        use_cosine = False,
+        k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
         datadir = str(abspath(join(dirname(__file__), 'data'))),
-        mine_ratio = 0.1,
-        mine_batch_size = 5000,
+        train_size = 500000,
+        align_batch_size = 5000,
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
         mt_model_name="facebook/mbart-large-cc25",
         mapping="UMD",
         do_lower_case=False,
-        remap_size = 2000,
+        remap_size = 3000,
         embed_batch_size = 128,
         translate_batch_size = 16,
         ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverNMTAligner.__init__(self, device, use_knn, k_align, k_mine, n_gram, knn_batch_size,
-            datadir, mine_ratio, mine_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio)
+        XMoverNMTAligner.__init__(self, device, k, n_gram, knn_batch_size, datadir,
+            train_size, align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)

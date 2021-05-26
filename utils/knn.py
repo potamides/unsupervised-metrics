@@ -64,3 +64,7 @@ def ratio_margin_align(source_data, target_data, k, batch_size, device):
 def wcd_align(source_data, target_data, k, batch_size, device):
     squared_scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
     return indeces, np.sqrt(squared_scores)
+
+def cosine_align(source_data, target_data, k, batch_size, device):
+    squared_scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device, True)
+    return indeces, squared_scores

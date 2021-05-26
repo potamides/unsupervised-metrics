@@ -8,20 +8,18 @@ from tarfile import open as topen
 from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
-from nltk import tokenize
 from io import TextIOWrapper
-from mosestokenizer import MosesDetokenizer
+from mosestokenizer import MosesDetokenizer, MosesTokenizer
 import logging
 
 source_lang, target_lang = "de", "en"
 iterations = 5
-max_monolingual_sent_len = 80
+min_monolingual_sent_len, max_monolingual_sent_len = 3, 80
 
 monolingual_data = {
-    "filenames": (f"news.{{}}.{source_lang}.shuffled.deduped.gz", f"news.{{}}.{target_lang}.shuffled.deduped.gz"),
+    "filenames": (f"news.2020.{source_lang}.shuffled.deduped.gz", f"news.2020.{target_lang}.shuffled.deduped.gz"),
     "urls": (f"http://data.statmt.org/news-crawl/{source_lang}", f"http://data.statmt.org/news-crawl/{target_lang}"),
-    "versions": list(range(2007, 2020)),
-    "samples": 20000,
+    "samples": (60000, 10000000),
     "path": str(Path(__file__).parent / "data")
 }
 parallel_data = {
@@ -55,20 +53,17 @@ def download_datasets():
         else:
             identifiers = zip(dataset["filenames"], dataset["urls"])
         for filename, url in identifiers:
-            # find first version that exists
-            for version in dataset.get("versions", [None]):
-                fileversion = filename.format(version)
-                if not isfile(join(dataset["path"], fileversion)):
-                    try:
-                        urlretrieve(join(url, fileversion), join(dataset["path"], fileversion))
-                        logging.info(f"Downloaded {fileversion} dataset.")
-                        break
-                    except URLError:
-                        pass
-                else:
+            if not isfile(join(dataset["path"], filename)):
+                try:
+                    urlretrieve(join(url, filename), join(dataset["path"], filename))
+                    logging.info(f"Downloaded {filename} dataset.")
                     break
+                except URLError:
+                    pass
+            else:
+                break
 
-def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
+def extract_dataset(type_, monolingual_full=False, use_mlqe=False):
     if type_ == "parallel":
         parallel_source, parallel_target = list(), list()
         index = 0 if isfile(join(parallel_data["path"], parallel_data["filenames"][0])) else 1
@@ -81,24 +76,21 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
 
     elif type_ == "monolingual":
         mono_source, mono_target= list(), list()
-        mpath, mfiles, versions = monolingual_data["path"], monolingual_data["filenames"], monolingual_data["versions"]
-        src_paths = [join(mpath, mfiles[0].format(version)) for version in versions]
-        tgt_paths = [join(mpath, mfiles[1].format(version)) for version in versions]
-        src_path = next((path for path in src_paths if isfile(path)))
-        tgt_path = next((path for path in tgt_paths if isfile(path)))
-        with gopen(src_path, "rt") as f, gopen(tgt_path, "rt") as g:
+        mpath, mfiles = monolingual_data["path"], monolingual_data["filenames"]
+        with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g, \
+            MosesTokenizer(source_lang) as src_tokenize, MosesTokenizer(target_lang) as tgt_tokenize:        
             collected_src_samples, collected_tgt_samples = 0, 0
             for src in f:
-                if len(tokenize(src)) < max_monolingual_sent_len:
+                if min_monolingual_sent_len <= len(src_tokenize(src)) <= max_monolingual_sent_len:
                     mono_source.append(src.strip())
                     collected_src_samples += 1
-                    if not monolingual_full and collected_src_samples >= monolingual_data["samples"]:
+                    if collected_src_samples >= monolingual_data["samples"][1 if monolingual_full else 0]:
                         break
             for tgt in g:
-                if len(tokenize(tgt)) < max_monolingual_sent_len:
+                if min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < max_monolingual_sent_len:
                     mono_target.append(tgt.strip())
                     collected_tgt_samples += 1
-                    if not monolingual_full and collected_tgt_samples >= monolingual_data["samples"]:
+                    if collected_tgt_samples >= monolingual_data["samples"][1 if monolingual_full else 0]:
                         break
         return mono_source, mono_target
 
@@ -126,9 +118,9 @@ def extract_dataset(tokenize, type_, monolingual_full=False, use_mlqe=False):
 
 def bert_tests(use_ratio_margin=False):
     aligner = RatioMarginBertAligner() if use_ratio_margin else XMoverBertAligner()
-    parallel_src, parallel_tgt = extract_dataset(aligner.tokenizer.tokenize, "parallel")
-    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
-    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
+    parallel_src, parallel_tgt = extract_dataset("parallel")
+    mono_src, mono_tgt = extract_dataset("monolingual")
+    eval_src, eval_system, eval_scores = extract_dataset("scored")
 
     logging.info("Evaluating performance before remapping.")
     logging.info(f"Precision @ 1: {aligner.precision(parallel_src, parallel_tgt)}")
@@ -141,16 +133,16 @@ def bert_tests(use_ratio_margin=False):
   
 def vecmap_tests():
     aligner = XMoverVecMapAligner(src_lang=source_lang, tgt_lang=target_lang)
-    parallel_src, parallel_tgt = extract_dataset(tokenize, "parallel")
-    eval_src, eval_system, eval_scores = extract_dataset(tokenize, "scored")
+    parallel_src, parallel_tgt = extract_dataset("parallel")
+    eval_src, eval_system, eval_scores = extract_dataset("scored")
 
     logging.info(f"Precision: {aligner.precision(parallel_src, parallel_tgt)}.")
     logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
 
 def nmt_tests():
     aligner = XMoverNMTBertAligner(src_lang=source_lang, tgt_lang=target_lang)
-    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual")
-    eval_src, eval_system, eval_scores = extract_dataset(aligner.tokenizer.tokenize, "scored")
+    mono_src, mono_tgt = extract_dataset("monolingual")
+    eval_src, eval_system, eval_scores = extract_dataset("scored")
 
     logging.info("Evaluating performance before remapping.")
     logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
@@ -160,7 +152,7 @@ def nmt_tests():
         aligner.remap(mono_src, mono_tgt)
         logging.info("Pearson: {}, Spearman: {}".format(*aligner.correlation(eval_src, eval_system, eval_scores)))
         logging.info("RMSE: {}, MAE: {}".format(*aligner.error(eval_src, eval_system, eval_scores)))
-    mono_src, mono_tgt = extract_dataset(aligner.tokenizer.tokenize, "monolingual", True)
+    mono_src, mono_tgt = extract_dataset("monolingual", True)
     aligner.train(mono_src, mono_tgt, False)
 
     logging.info("Evaluating performance with NMT model.")

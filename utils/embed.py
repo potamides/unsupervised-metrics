@@ -8,14 +8,12 @@ from shutil import copyfileobj
 from urllib.request import urlretrieve
 from gzip import open as gopen
 from tempfile import NamedTemporaryFile as TempFile
+from mosestokenizer import MosesTokenizer
 path.append(abspath(join(dirname(__file__), 'vecmap')))
 from .vecmap.map_embeddings import main as vecmap
-from nltk import tokenize, download, data
 
 fasttext_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/"
 datadir = str(abspath(join(dirname(__file__), '../data')))
-download('punkt', download_dir=datadir, quiet=True)
-data.path.append(datadir)
 
 def padding(arr, pad_token, dtype=torch.long):
     lens = torch.LongTensor([len(a) for a in arr])
@@ -94,12 +92,13 @@ def get_embeddings_file(lang_id):
 
     return join(datadir, filename)
 
-def vecmap_embed(all_sents, lang_dict):
+def vecmap_embed(all_sents, lang_dict, lang):
     tokens, idf_weights, embeddings = list(), list(), list()
-    for sent in all_sents:
-        tokens.append([word for word in tokenize.word_tokenize(sent)])
-        idf_weights.append([1] * len(tokens[-1]))
-        embeddings.append(torch.stack([lang_dict[word] for word in tokens[-1]]))
+    with MosesTokenizer(lang) as tokenize:
+        for sent in all_sents:
+            tokens.append([word for word in tokenize.word_tokenize(sent)])
+            idf_weights.append([1] * len(tokens[-1]))
+            embeddings.append(torch.stack([lang_dict[word] for word in tokens[-1]]))
 
     idf_weights, mask = padding(idf_weights, 0, dtype=torch.float)
     embeddings = pad_sequence(embeddings, batch_first=True)
