@@ -1,9 +1,11 @@
 import numpy as np
 import torch
+from itertools import chain
 from subprocess import check_output, DEVNULL
 from tempfile import NamedTemporaryFile as TempFile
 from pathlib import Path
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
+from string import punctuation
 
 datadir = str((Path(__file__).parent.parent / "data").resolve())
 
@@ -115,13 +117,13 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
 
     return src_matrix, tgt_matrix
 
-def word_align(sent_pairs, tokenizer, size, max_seq_length=100):
+def fast_align(sent_pairs, tokenizer, size, max_seq_length=100):
     tokenized_pairs = list()
     for source_sent, target_sent in sent_pairs:
         sent1 = tokenizer.basic_tokenizer.tokenize(source_sent)
         sent2 = tokenizer.basic_tokenizer.tokenize(target_sent)
         
-        if len(sent1) <= max_seq_length and len(sent2) <= max_seq_length and len(sent1) > 0 and len(sent2) > 0:
+        if 0 < len(sent1) <= max_seq_length and 0 < len(sent2) <= max_seq_length:
             tokenized_pairs.append((sent1, sent2))
             
         if len(tokenized_pairs) >= size:
@@ -139,6 +141,53 @@ def word_align(sent_pairs, tokenizer, size, max_seq_length=100):
 
     sym_aligned = [[tuple(map(int, pair.split(b"-"))) for pair in pairs.split()] for pairs in sym_aligned.splitlines()]
     return tokenized_pairs, sym_aligned
+
+def awesome_align(sentpairs, model, tokenizer, size, max_seq_length=100):
+    tokenized_pairs, alignments = list(), list()
+    for src, tgt in sentpairs:
+        sent_src, sent_tgt = tokenizer.basic_tokenizer.tokenize(src), tokenizer.basic_tokenizer.tokenize(tgt)
+        if 0 < len(sent_src) <= max_seq_length and 0 < len(sent_tgt) <= max_seq_length:
+            token_src = [tokenizer.tokenize(word) for word in sent_src] 
+            token_tgt = [tokenizer.tokenize(word) for word in sent_tgt]
+            wid_src = [tokenizer.convert_tokens_to_ids(x) for x in token_src]
+            wid_tgt = [tokenizer.convert_tokens_to_ids(x) for x in token_tgt]
+            ids_src = tokenizer.prepare_for_model(list(chain(*wid_src)), return_tensors='pt', truncation=True)['input_ids']
+            ids_tgt = tokenizer.prepare_for_model(list(chain(*wid_tgt)), return_tensors='pt', truncation=True)['input_ids']
+            sub2word_map_src = []
+            for i, word_list in enumerate(token_src):
+                sub2word_map_src.extend([i] * len(word_list))
+            sub2word_map_tgt = []
+            for i, word_list in enumerate(token_tgt):
+                sub2word_map_tgt.extend([i] * len(word_list))
+
+            # alignment
+            align_layer = 8
+            threshold = 1e-3
+            model.eval()
+            with torch.no_grad():
+                out_src = model(ids_src.unsqueeze(0), output_hidden_states=True)[2][align_layer][0, 1:-1]
+                out_tgt = model(ids_tgt.unsqueeze(0), output_hidden_states=True)[2][align_layer][0, 1:-1]
+
+                dot_prod = torch.matmul(out_src, out_tgt.transpose(-1, -2))
+
+                softmax_srctgt = torch.nn.Softmax(dim=-1)(dot_prod)
+                softmax_tgtsrc = torch.nn.Softmax(dim=-2)(dot_prod)
+
+                softmax_inter = (softmax_srctgt > threshold)*(softmax_tgtsrc > threshold)
+
+            align_subwords = torch.nonzero(softmax_inter, as_tuple=False)
+            align_words = set()
+            for i, j in align_subwords:
+                if sent_src[sub2word_map_src[i]] not in punctuation and sent_tgt[sub2word_map_tgt[j]] not in punctuation:
+                    align_words.add((sub2word_map_src[i], sub2word_map_tgt[j]))
+
+            tokenized_pairs.append((sent_src, sent_tgt))
+            alignments.append(list(align_words))
+
+            if len(tokenized_pairs) >= size:
+                break
+
+    return tokenized_pairs, alignments
 
 def clp(x, z, orthogonal=True):
     if orthogonal:

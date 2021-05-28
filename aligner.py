@@ -2,7 +2,7 @@ from transformers import BertModel, BertTokenizer, BertConfig
 from utils.wmd import word_mover_align, word_mover_score
 from utils.knn import wcd_align, ratio_margin_align, cosine_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
-from utils.remap import word_align, get_aligned_features_avgbpe, clp, umd
+from utils.remap import fast_align, awesome_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
 from torch.cuda import is_available as cuda_is_available
 from torch.nn.functional import cosine_similarity, mse_loss, l1_loss
@@ -209,7 +209,7 @@ class XMoverNMTAligner(XMoverAligner):
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class BertEmbedder(Common):
-    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size):
+    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, use_fast_align):
         config = BertConfig.from_pretrained(model_name)
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(model_name, config=config)
@@ -219,6 +219,7 @@ class BertEmbedder(Common):
         self.remap_size = remap_size
         self.embed_batch_size = embed_batch_size
         self.projection = None
+        self.use_fast_align = use_fast_align
 
     def _embed(self, source_sents, target_sents, same_language=False):
         src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
@@ -249,7 +250,10 @@ class BertEmbedder(Common):
             ):
                 sorted_sent_pairs.append((src_sent, tgt_sent))
 
-        tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
+        if self.use_fast_align:
+            tokenized_pairs, align_pairs = fast_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
+        else:
+            tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model,self.tokenizer, self.remap_size)
         src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                 self.model, self.tokenizer, self.embed_batch_size, self.device)
 
@@ -287,6 +291,7 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
         use_cosine = False,
+        use_fast_align = False,
         k = 20,
         n_gram = 1,
         remap_size = 2000,
@@ -296,7 +301,8 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
+        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
+                use_fast_align)
 
 class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
     def __init__(
@@ -305,13 +311,15 @@ class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
+        use_fast_align = False,
         k = 20,
         remap_size = 2000,
         embed_batch_size = 128,
         knn_batch_size = 1000000
     ):
         RatioMarginAligner.__init__(self, device, k, knn_batch_size)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
+        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
+                use_fast_align)
 
 class XMoverVecMapAligner(XMoverAligner, VecMapEmbedder):
     def __init__(
@@ -335,6 +343,7 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         self,
         device="cuda" if cuda_is_available() else "cpu",
         use_cosine = False,
+        use_fast_align = False,
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
@@ -355,4 +364,5 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAligner.__init__(self, device, k, n_gram, knn_batch_size, datadir,
             train_size, align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size)
+        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
+                use_fast_align)
