@@ -2,8 +2,9 @@ from faiss import IndexFlatL2, IndexFlatIP, index_cpu_to_all_gpus, normalize_L2
 import numpy as np
 
 def knn_sharded(source_data, target_data, k, batch_size, device, use_cosine=False):
-    source_data = normalize_L2(source_data) if use_cosine else source_data
-    target_data = normalize_L2(target_data) if use_cosine else target_data
+    if use_cosine:
+        normalize_L2(source_data)
+        normalize_L2(target_data)
     sims = []
     inds = []
     dim = source_data.shape[-1]
@@ -66,5 +67,5 @@ def wcd_align(source_data, target_data, k, batch_size, device):
     return indeces, np.sqrt(squared_scores)
 
 def cosine_align(source_data, target_data, k, batch_size, device):
-    squared_scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device, True)
-    return indeces, squared_scores
+    scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device, True)
+    return indeces, scores

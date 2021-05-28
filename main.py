@@ -19,7 +19,7 @@ min_monolingual_sent_len, max_monolingual_sent_len = 3, 80
 monolingual_data = {
     "filenames": (f"news.2020.{source_lang}.shuffled.deduped.gz", f"news.2020.{target_lang}.shuffled.deduped.gz"),
     "urls": (f"http://data.statmt.org/news-crawl/{source_lang}", f"http://data.statmt.org/news-crawl/{target_lang}"),
-    "samples": (60000, 10000000),
+    "samples": (20000, 10000000),
     "path": str(Path(__file__).parent / "data")
 }
 parallel_data = {
@@ -57,11 +57,8 @@ def download_datasets():
                 try:
                     urlretrieve(join(url, filename), join(dataset["path"], filename))
                     logging.info(f"Downloaded {filename} dataset.")
-                    break
                 except URLError:
                     pass
-            else:
-                break
 
 def extract_dataset(type_, monolingual_full=False, use_mlqe=False):
     if type_ == "parallel":

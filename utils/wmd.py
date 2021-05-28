@@ -46,11 +46,7 @@ def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tg
     c1[:len(src_idf_ngrams)] = src_idf_ngrams
     c2[-len(tgt_idf_ngrams):] = tgt_idf_ngrams
 
-    score = 1 - emd(_safe_divide(c1, np.sum(c1)),
-                _safe_divide(c2, np.sum(c2)),
-                distance_matrix.double().numpy())
-
-    return score
+    return -emd(_safe_divide(c1, np.sum(c1)), _safe_divide(c2, np.sum(c2)), distance_matrix.double().numpy())
 
 def word_mover_align(source_data, target_data, n_gram, candidates=None):
     src_embedding_ngrams, src_idf_ngrams = list(), list()
@@ -67,7 +63,7 @@ def word_mover_align(source_data, target_data, n_gram, candidates=None):
 
     pairs, scores = list(), list()
     for src_index in range(len(src_embedding_ngrams)):
-        best_score = 0
+        best_score = float("-inf")
         best_tgt_index = -1
         # use only the nearest neighbors, when they are provided
         for tgt_index in range(len(tgt_embedding_ngrams)) if candidates is None else candidates[src_index]:

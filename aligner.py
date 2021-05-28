@@ -10,9 +10,9 @@ from os.path import isfile, join, dirname, abspath
 from json import dumps
 from math import ceil
 from numpy import corrcoef, argsort, arange
-from itertools import islice
 from nltk.metrics.distance import edit_distance
 from abc import ABC, abstractmethod
+from re import findall
 import logging
 import torch
 
@@ -73,20 +73,21 @@ class XMoverAligner(Common):
                 target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
             idx += self.align_batch_size
 
-        return source_sent_embeddings, target_sent_embeddings
+        return torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings)
 
     def _memory_efficient_word_mover_align(self, source_sents, target_sents, candidates):
         pairs, scores, idx, k = list(), list(), 0, candidates.shape[1]
+        batch_size = ceil(self.align_batch_size / k)
         while idx < len(source_sents):
             src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(
-                source_sents[idx:idx + self.align_batch_size],
-                [target_sents[candidate] for candidate in candidates[idx:idx + self.align_batch_size].flatten()])
+                source_sents[idx:idx + batch_size],
+                [target_sents[candidate] for candidate in candidates[idx:idx + batch_size].flatten()])
             batch_pairs, batch_scores = word_mover_align((src_embeddings, src_idf, src_tokens),
                 (tgt_embeddings, tgt_idf, tgt_tokens), self.n_gram,
                 arange(len(src_embeddings) * k).reshape(len(src_embeddings), k))
-            pairs.extend([(src + idx, candidates[idx:idx + self.align_batch_size].flatten()[tgt]) for src, tgt in batch_pairs])
+            pairs.extend([(src + idx, candidates[idx:idx + batch_size].flatten()[tgt]) for src, tgt in batch_pairs])
             scores.extend(batch_scores)
-            idx += self.align_batch_size
+            idx += batch_size
         return pairs, scores
 
     def align(self, source_sents, target_sents):
@@ -176,24 +177,28 @@ class XMoverNMTAligner(XMoverAligner):
             pairs, scores = list(), list()
             if self.use_cosine:
                 logging.info("Mining pseudo parallel data with Ratio Margin function.")
-                pairs, scores = ratio_margin_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings),
-                        self.k, self.knn_batch_size, self.device)
+                pairs, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
+                        self.knn_batch_size, self.device)
             else:
                 logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-                candidates = wcd_align(torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings), k,
-                    self.knn_batch_size, self.device)[0]
+                candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, self.knn_batch_size,
+                        self.device)
                 logging.info("Computing exact Word Mover's Distances for candidates.")
                 pairs, scores = self._memory_efficient_word_mover_align(source_sents, target_sents, candidates)
-        with open(file_path, "wb") as f:
-            idx = 0
-            for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
-                src_sent, tgt_sent = source_sents[src], target_sents[tgt]
-                if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
-                    line = { "translation": { self.src_lang: src_sent, self.tgt_lang: tgt_sent} }
-                    f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
-                    idx += 1
-                if idx >= self.train_size:
-                    break
+            with open(file_path, "wb") as f:
+                idx = 0
+                for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
+                    src_sent, tgt_sent = source_sents[src], target_sents[tgt]
+                    if (
+                        edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
+                        and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
+                    ):
+                        line = { "translation": { self.src_lang: src_sent, self.tgt_lang: tgt_sent} }
+                        f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
+                        idx += 1
+                    if idx >= self.train_size:
+                        break
+
         logging.info("Training MT model with pseudo parallel data.")
         self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
                 overwrite, self.datadir)
@@ -216,10 +221,8 @@ class BertEmbedder(Common):
         self.projection = None
 
     def _embed(self, source_sents, target_sents, same_language=False):
-        logging.info("Embedding source sentences with mBERT.")
         src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
                 self.tokenizer, self.device)
-        logging.info("Embedding target sentences with mBERT.")
         tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = bert_embed(target_sents, self.embed_batch_size, self.model,
                 self.tokenizer, self.device)
         
@@ -240,7 +243,10 @@ class BertEmbedder(Common):
         sent_pairs, scores = self.align(source_sents, target_sents)
         sorted_sent_pairs = list()
         for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
-            if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
+            if (
+                edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
+                and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
+            ):
                 sorted_sent_pairs.append((src_sent, tgt_sent))
 
         tokenized_pairs, align_pairs = word_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
@@ -283,7 +289,7 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         use_cosine = False,
         k = 20,
         n_gram = 1,
-        remap_size = 3000,
+        remap_size = 2000,
         embed_batch_size = 128,
         knn_batch_size = 1000000,
         align_batch_size = 5000
@@ -300,7 +306,7 @@ class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
         device="cuda" if cuda_is_available() else "cpu",
         do_lower_case=False,
         k = 20,
-        remap_size = 3000,
+        remap_size = 2000,
         embed_batch_size = 128,
         knn_batch_size = 1000000
     ):
@@ -341,7 +347,7 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         mt_model_name="facebook/mbart-large-cc25",
         mapping="UMD",
         do_lower_case=False,
-        remap_size = 3000,
+        remap_size = 2000,
         embed_batch_size = 128,
         translate_batch_size = 16,
         ratio = 0.5
