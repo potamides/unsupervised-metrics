@@ -209,7 +209,7 @@ class XMoverNMTAligner(XMoverAligner):
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class BertEmbedder(Common):
-    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, use_fast_align, 
+    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment,
             datadir):
         config = BertConfig.from_pretrained(model_name)
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
@@ -220,7 +220,7 @@ class BertEmbedder(Common):
         self.remap_size = remap_size
         self.embed_batch_size = embed_batch_size
         self.projection = None
-        self.use_fast_align = use_fast_align
+        self.alignment = alignment
         self.datadir = datadir
 
     def _embed(self, source_sents, target_sents, same_language=False):

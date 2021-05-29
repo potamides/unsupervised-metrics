@@ -8,3 +8,4 @@ nltk==3.5
 sentencepiece==0.1.95
 mosestokenizer==1.1.0
 git+https://github.com/cisnlp/simalign.git@v0.2#egg=simalign
+truecase==0.0.12

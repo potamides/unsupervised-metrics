@@ -132,7 +132,7 @@ def extract_dataset(type_, ):
             with open(path, "rb") as f, Detokenizer(source_lang) as src_detokenize, Detokenizer(target_lang) as tgt_detokenize:
                 for line in f.readlines()[1:]:
                     lp, _, system, sid, human = line.decode().split()
-                    src, tgt, index, score = lp.split("-"), int(sid), float(human)
+                    (src, tgt), index, score = lp.split("-"), int(sid), float(human)
                     systems = system.split("+")
 
                     if src == source_lang and tgt == target_lang:
