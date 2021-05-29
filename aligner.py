@@ -49,8 +49,8 @@ class Common(ABC):
         Computes Mean Absolute Error and Root Mean Squared Error.
         """
         scores = self.score(source_sents, system_sents)
-        rmse = mse_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).sqrt()
-        mae = l1_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores))
+        rmse = mse_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).sqrt().item()
+        mae = l1_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).item()
         return rmse, mae
 
 class XMoverAligner(Common):
@@ -241,7 +241,7 @@ class BertEmbedder(Common):
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
     def remap(self, source_sents, target_sents, suffix="tensor", overwrite=True):
-        file_path = join(self.datadir, f"projection-{suffix}.pt"), list(), list()
+        file_path = join(self.datadir, f"projection-{suffix}.pt")
         if not isfile(file_path) or overwrite:
             logging.info(f'Computing projection tensor for {self.mapping} remapping method.')
             sent_pairs, scores = self.align(source_sents, target_sents)

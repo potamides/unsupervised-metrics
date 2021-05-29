@@ -28,8 +28,11 @@ parallel_data = {
         f"news-commentary-v15.{source_lang}-{target_lang}.tsv.gz",
         f"news-commentary-v15.{target_lang}-{source_lang}.tsv.gz"
     ),
-    "urls": ("http://data.statmt.org/news-commentary/v15/training", ),
-    "samples": (3000, 40000),
+    "urls": (
+        "http://data.statmt.org/news-commentary/v15/training",
+        "http://data.statmt.org/news-commentary/v15/training"
+    ),
+    "samples": (10000, 40000),
     "path": str(Path(__file__).parent / "data")
 }
 news_eval_data = {
@@ -77,7 +80,7 @@ def extract_dataset(type_, ):
         index = 0 if isfile(join(parallel_data["path"], parallel_data["filenames"][0])) else 1
         with gopen(join(parallel_data["path"], parallel_data["filenames"][index]), 'rt') as tsvfile:
             samples = parallel_data["samples"][1 if type_.endswith("align") else 0]
-            for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), parallel_data["samples"]):
+            for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples):
                 if src.strip() and tgt.strip():
                     parallel_source.append(src if index == 0 else tgt)
                     parallel_target.append(tgt if index == 0 else src)
