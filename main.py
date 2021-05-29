@@ -9,7 +9,10 @@ from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
 from io import TextIOWrapper
-from mosestokenizer import MosesDetokenizer, MosesTokenizer
+from mosestokenizer import MosesTokenizer
+from linecache import getline
+from truecase import get_true_case
+from mosestokenizer import MosesDetokenizer as Detokenizer
 import logging
 
 source_lang, target_lang = "de", "en"
@@ -47,8 +50,16 @@ news_eval_data = {
     )
 }
 wmt_eval_data = {
-    "filename": f"testset_{source_lang}-{target_lang}.tsv",
-    "url": "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/WMT17/testset",
+    "filenames": (
+        "DA-seglevel.csv",
+        f"newstest2017-{source_lang}{target_lang}-src.{source_lang}",
+        f"newstest2017.{{}}.{source_lang}-{target_lang}"
+    ),
+    "urls": (
+        "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/WMT17",
+        "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/WMT17/source",
+        f"https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/WMT17/system-outputs/{source_lang}-{target_lang}"
+        ),
     "samples": 560,
     "path": str(Path(__file__).parent / "data"),
 }
@@ -117,13 +128,26 @@ def extract_dataset(type_, ):
                     eval_system.append(mt.strip())
                     eval_scores.append(float(score))
         elif type_.endswith("wmt"):
-            with open(join(wmt_eval_data["path"], wmt_eval_data["filename"]), newline='') as f:
-                tsvdata = reader(f, delimiter="\t", quoting=QUOTE_NONE)
-                with MosesDetokenizer(source_lang) as src_detokenize, MosesDetokenizer(target_lang) as tgt_detokenize:        
-                    for _, src, mt, _, score, _ in islice(tsvdata, 1, wmt_eval_data["samples"] + 1):
-                        eval_source.append(src_detokenize(src.split()))
-                        eval_system.append(tgt_detokenize(mt.split()))
-                        eval_scores.append(float(score))
+            path = join(wmt_eval_data["path"], wmt_eval_data["filenames"][0])
+            with open(path, "rb") as f, Detokenizer(source_lang) as src_detokenize, Detokenizer(target_lang) as tgt_detokenize:
+                for line in f.readlines()[1:]:
+                    lp, _, system, sid, human = line.decode().split()
+                    src, tgt, index, score = lp.split("-"), int(sid), float(human)
+                    systems = system.split("+")
+
+                    if src == source_lang and tgt == target_lang:
+                        source = src_detokenize(getline(join(wmt_eval_data["path"], wmt_eval_data["filenames"][1]), index).split())
+                        hypotheses = list()
+                        for system in systems:
+                            hyp_file = wmt_eval_data["filenames"][2].format(system)
+                            if not isfile(join(wmt_eval_data["path"], hyp_file)):
+                                urlretrieve(join(wmt_eval_data["urls"][2], hyp_file), join(wmt_eval_data["path"], hyp_file))
+                            hypothesis = getline(join(wmt_eval_data["path"], hyp_file), index)
+                            hypotheses.append(get_true_case(tgt_detokenize(hypothesis.split())))
+                        assert len(set(hypotheses)) == 1
+                        eval_source.append(source)
+                        eval_system.append(hypotheses[0])
+                        eval_scores.append(score)
         else:
             samples, members = news_eval_data["samples"], news_eval_data["members"]
             with topen(join(news_eval_data["path"], news_eval_data["filename"]), 'r:gz') as tf:
