@@ -2,7 +2,7 @@ from transformers import BertModel, BertTokenizer, BertConfig
 from utils.wmd import word_mover_align, word_mover_score
 from utils.knn import wcd_align, ratio_margin_align, cosine_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
-from utils.remap import fast_align, awesome_align, get_aligned_features_avgbpe, clp, umd
+from utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
 from torch.cuda import is_available as cuda_is_available
 from torch.nn.functional import cosine_similarity, mse_loss, l1_loss
@@ -169,8 +169,8 @@ class XMoverNMTAligner(XMoverAligner):
             mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, overwrite=True, k=1):
-        file_path, pairs, scores = join(self.datadir, f"{self.src_lang}-{self.tgt_lang}-mined.json"), list(), list()
+    def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=1):
+        file_path, pairs, scores = join(self.datadir, f"mined-{suffix}.json"), list(), list()
         if not isfile(file_path) or overwrite:
             logging.info("Obtaining sentence embeddings.")
             source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(source_sents, target_sents)
@@ -201,7 +201,7 @@ class XMoverNMTAligner(XMoverAligner):
 
         logging.info("Training MT model with pseudo parallel data.")
         self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
-                overwrite, self.datadir)
+                overwrite, self.datadir, suffix)
         self.mt_model.to(self.device)
 
     def translate(self, sentences):
@@ -209,7 +209,8 @@ class XMoverNMTAligner(XMoverAligner):
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class BertEmbedder(Common):
-    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, use_fast_align):
+    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, use_fast_align, 
+            datadir):
         config = BertConfig.from_pretrained(model_name)
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(model_name, config=config)
@@ -220,6 +221,7 @@ class BertEmbedder(Common):
         self.embed_batch_size = embed_batch_size
         self.projection = None
         self.use_fast_align = use_fast_align
+        self.datadir = datadir
 
     def _embed(self, source_sents, target_sents, same_language=False):
         src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
@@ -238,30 +240,38 @@ class BertEmbedder(Common):
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
-    def remap(self, source_sents, target_sents):
-        logging.info(f'Computing projection tensor for {"CLP" if self.mapping == "CLP" else "UMD"} remapping method.')
+    def remap(self, source_sents, target_sents, suffix="tensor", overwrite=True):
+        file_path = join(self.datadir, f"projection-{suffix}.pt"), list(), list()
+        if not isfile(file_path) or overwrite:
+            logging.info(f'Computing projection tensor for {self.mapping} remapping method.')
+            sent_pairs, scores = self.align(source_sents, target_sents)
+            sorted_sent_pairs = list()
+            for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
+                if (
+                    edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
+                    and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
+                ):
+                    sorted_sent_pairs.append((src_sent, tgt_sent))
 
-        sent_pairs, scores = self.align(source_sents, target_sents)
-        sorted_sent_pairs = list()
-        for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
-            if (
-                edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
-                and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
-            ):
-                sorted_sent_pairs.append((src_sent, tgt_sent))
+            if self.alignment == "fast":
+                tokenized_pairs, align_pairs = fast_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
+            elif self.alignment == "sim":
+                tokenized_pairs, align_pairs = sim_align(sorted_sent_pairs, self.tokenizer, self.remap_size, self.device)
+            else:
+                tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model, self.tokenizer,
+                        self.remap_size, self.device)
+            src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
+                    self.model, self.tokenizer, self.embed_batch_size, self.device)
 
-        if self.use_fast_align:
-            tokenized_pairs, align_pairs = fast_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
+            logging.info(f"Using {len(src_matrix)} aligned word pairs to compute projection tensor.")
+            if self.mapping == "CLP":
+                self.projection = clp(src_matrix, tgt_matrix)
+            else:
+                self.projection = umd(src_matrix, tgt_matrix)
+            torch.save(self.projection, file_path)
         else:
-            tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model,self.tokenizer, self.remap_size)
-        src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
-                self.model, self.tokenizer, self.embed_batch_size, self.device)
-
-        logging.info(f"Using {len(src_matrix)} aligned word pairs to compute projection tensor.")
-        if self.mapping == "CLP":
-            self.projection = clp(src_matrix, tgt_matrix)
-        else:
-            self.projection = umd(src_matrix, tgt_matrix)
+            logging.info(f'Loading {self.mapping} projection tensor from disk.')
+            self.projection = torch.load(file_path)
 
 class VecMapEmbedder(Common):
     def __init__(self, device, src_lang, tgt_lang, batch_size):
@@ -289,9 +299,10 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         model_name="bert-base-multilingual-cased",
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
+        datadir = str(abspath(join(dirname(__file__), 'data'))),
         do_lower_case=False,
         use_cosine = False,
-        use_fast_align = False,
+        alignment = "awesome",
         k = 20,
         n_gram = 1,
         remap_size = 2000,
@@ -302,7 +313,7 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                use_fast_align)
+                alignment, datadir)
 
 class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
     def __init__(
@@ -310,8 +321,9 @@ class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
         model_name="bert-base-multilingual-cased",
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
+        datadir = str(abspath(join(dirname(__file__), 'data'))),
         do_lower_case=False,
-        use_fast_align = False,
+        alignment = "awesome",
         k = 20,
         remap_size = 2000,
         embed_batch_size = 128,
@@ -319,7 +331,7 @@ class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
     ):
         RatioMarginAligner.__init__(self, device, k, knn_batch_size)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                use_fast_align)
+                alignment, datadir)
 
 class XMoverVecMapAligner(XMoverAligner, VecMapEmbedder):
     def __init__(
@@ -343,7 +355,7 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         self,
         device="cuda" if cuda_is_available() else "cpu",
         use_cosine = False,
-        use_fast_align = False,
+        alignment = "awesome",
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
@@ -365,4 +377,4 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         XMoverNMTAligner.__init__(self, device, k, n_gram, knn_batch_size, datadir,
             train_size, align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
         BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                use_fast_align)
+                alignment, datadir)

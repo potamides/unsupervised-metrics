@@ -4,8 +4,8 @@ from itertools import chain
 from subprocess import check_output, DEVNULL
 from tempfile import NamedTemporaryFile as TempFile
 from pathlib import Path
+from simalign import SentenceAligner
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
-from string import punctuation
 
 datadir = str((Path(__file__).parent.parent / "data").resolve())
 
@@ -142,7 +142,7 @@ def fast_align(sent_pairs, tokenizer, size, max_seq_length=100):
     sym_aligned = [[tuple(map(int, pair.split(b"-"))) for pair in pairs.split()] for pairs in sym_aligned.splitlines()]
     return tokenized_pairs, sym_aligned
 
-def awesome_align(sentpairs, model, tokenizer, size, max_seq_length=100):
+def awesome_align(sentpairs, model, tokenizer, size, device, max_seq_length=100):
     tokenized_pairs, alignments = list(), list()
     for src, tgt in sentpairs:
         sent_src, sent_tgt = tokenizer.basic_tokenizer.tokenize(src), tokenizer.basic_tokenizer.tokenize(tgt)
@@ -165,10 +165,10 @@ def awesome_align(sentpairs, model, tokenizer, size, max_seq_length=100):
             threshold = 1e-3
             model.eval()
             with torch.no_grad():
-                out_src = model(ids_src.unsqueeze(0), output_hidden_states=True)[2][align_layer][0, 1:-1]
-                out_tgt = model(ids_tgt.unsqueeze(0), output_hidden_states=True)[2][align_layer][0, 1:-1]
+                out_src = model(ids_src.unsqueeze(0).to(device), output_hidden_states=True)[2][align_layer][0, 1:-1]
+                out_tgt = model(ids_tgt.unsqueeze(0).to(device), output_hidden_states=True)[2][align_layer][0, 1:-1]
 
-                dot_prod = torch.matmul(out_src, out_tgt.transpose(-1, -2))
+                dot_prod = torch.matmul(out_src.cpu(), out_tgt.transpose(-1, -2).cpu())
 
                 softmax_srctgt = torch.nn.Softmax(dim=-1)(dot_prod)
                 softmax_tgtsrc = torch.nn.Softmax(dim=-2)(dot_prod)
@@ -178,14 +178,29 @@ def awesome_align(sentpairs, model, tokenizer, size, max_seq_length=100):
             align_subwords = torch.nonzero(softmax_inter, as_tuple=False)
             align_words = set()
             for i, j in align_subwords:
-                if sent_src[sub2word_map_src[i]] not in punctuation and sent_tgt[sub2word_map_tgt[j]] not in punctuation:
-                    align_words.add((sub2word_map_src[i], sub2word_map_tgt[j]))
+                align_words.add((sub2word_map_src[i], sub2word_map_tgt[j]))
 
             tokenized_pairs.append((sent_src, sent_tgt))
             alignments.append(list(align_words))
 
             if len(tokenized_pairs) >= size:
                 break
+
+    return tokenized_pairs, alignments
+
+def sim_align(sent_pairs, tokenizer, size, device, max_seq_length=100):
+    tokenized_pairs, alignments = list(), list()
+    aligner = SentenceAligner(matching_methods="i", token_type="word", device=device)
+    for source_sent, target_sent in sent_pairs:
+        sent1 = tokenizer.basic_tokenizer.tokenize(source_sent)
+        sent2 = tokenizer.basic_tokenizer.tokenize(target_sent)
+        
+        if 0 < len(sent1) <= max_seq_length and 0 < len(sent2) <= max_seq_length:
+            tokenized_pairs.append((sent1, sent2))
+            alignments.append(aligner.get_word_aligns(sent1, sent2)["itermax"])
+            
+        if len(tokenized_pairs) >= size:
+            break
 
     return tokenized_pairs, alignments
 

@@ -187,7 +187,8 @@ def _train(args=None):
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+
+        if len(list(filter(os.path.isfile, os.listdir(training_args.output_dir)))) > 0:
             logger.info(
                 f"Output directory ({training_args.output_dir}) exists already and is not empty. "
                 "Skipping training and returning pretrained models."
@@ -303,7 +304,7 @@ def _train(args=None):
 
     return model, tokenizer
 
-def train(model, source_lang, target_lang, dataset, overwrite, datadir):
+def train(model, source_lang, target_lang, dataset, overwrite, datadir, suffix):
     if "mbart" in model:
         language2mBART = {
             "ar": "ar_AR", "cs": "cs_CZ", "de": "de_DE", "en": "en_XX", "es": "es_XX",
@@ -315,8 +316,8 @@ def train(model, source_lang, target_lang, dataset, overwrite, datadir):
         target_lang = language2mBART[target_lang]
     args = [
         "--model_name_or_path", model,
-        "--cache_dir", os.path.join(datadir, f"{os.path.basename(model)}/{source_lang}-{target_lang}/cache"),
-        "--output_dir", os.path.join(datadir, f"{os.path.basename(model)}/{source_lang}-{target_lang}/output"),
+        "--cache_dir", os.path.join(datadir, os.path.basename(model), suffix, "cache"),
+        "--output_dir", os.path.join(datadir, os.path.basename(model), suffix, "output"),
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,
