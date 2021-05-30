@@ -231,10 +231,8 @@ class BertEmbedder(Common):
         
         if self.projection is not None and not same_language:
             if self.mapping == 'CLP':
-                logging.info("Remap cross-lingual alignments with CLP")
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
             else:
-                logging.info("Remap cross-lingual alignments with UMD")
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
                         self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)        
 
