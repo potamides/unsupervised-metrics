@@ -5,55 +5,18 @@ from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
 from torch.cuda import is_available as cuda_is_available
-from torch.nn.functional import cosine_similarity, mse_loss, l1_loss
 from os.path import isfile, join, dirname, abspath
 from json import dumps
 from math import ceil
-from numpy import corrcoef, argsort, arange
+from numpy import arange
 from nltk.metrics.distance import edit_distance
-from abc import ABC, abstractmethod
+from .common import CommonScore
 from re import findall
 import logging
 import torch
 
-class Common(ABC):
-    @abstractmethod
-    def _embed():
-        pass
 
-    @abstractmethod
-    def align():
-        pass
-
-    @abstractmethod
-    def score():
-        pass
-
-    def precision(self, source_sents, ref_sents):
-        """
-        Computes Precision @ 1 scores.
-        """
-        pairs, _ = self.align(source_sents, ref_sents)
-        return sum([reference == predicted for reference, (_, predicted) in zip(ref_sents, pairs)]) / len(ref_sents)
-
-    def correlation(self, source_sents, system_sents, ref_scores):
-        """
-        Computes Pearson and Spearman correlation coefficients.
-        """
-        scores = self.score(source_sents, system_sents)
-        ref_ranks, ranks = argsort(ref_scores).argsort(), argsort(scores).argsort()
-        return corrcoef(ref_scores, scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
-
-    def error(self, source_sents, system_sents, ref_scores):
-        """
-        Computes Mean Absolute Error and Root Mean Squared Error.
-        """
-        scores = self.score(source_sents, system_sents)
-        rmse = mse_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).sqrt().item()
-        mae = l1_loss(torch.FloatTensor(ref_scores), torch.FloatTensor(scores)).item()
-        return rmse, mae
-
-class XMoverAligner(Common):
+class XMoverAlign(CommonScore):
     def __init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size):
         self.device = device
         self.k = k
@@ -114,33 +77,7 @@ class XMoverAligner(Common):
                 self.n_gram)
         return scores
 
-class RatioMarginAligner(Common):
-    def __init__(self, device, k, knn_batch_size):
-        self.device = device
-        self.k = k
-        self.knn_batch_size = knn_batch_size
-
-    def align(self, source_sents, target_sents):
-        src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
-                source_sents, target_sents)
-
-        logging.info("Computing scores with Ratio Margin algorithm.")
-        source_sent_embeddings = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
-        target_sent_embeddings = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
-        indeces, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
-                self.knn_batch_size, self.device)
-
-        sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in enumerate(indeces)]
-        return sent_pairs, scores
-
-    def score(self, source_sents, target_sents):
-        src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(source_sents, target_sents)
-        source_sent_embeddings = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
-        target_sent_embeddings = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
-        scores = cosine_similarity(source_sent_embeddings, target_sent_embeddings)
-        return scores
-
-class XMoverNMTAligner(XMoverAligner):
+class XMoverNMTAlign(XMoverAlign):
     """
     Extends XMoverScore based sentence aligner with an additional language model.
     """
@@ -208,7 +145,7 @@ class XMoverNMTAligner(XMoverAligner):
         logging.info("Translating sentences into target language.")
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
-class BertEmbedder(Common):
+class BertEmbed(CommonScore):
     def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment,
             datadir):
         config = BertConfig.from_pretrained(model_name)
@@ -271,7 +208,7 @@ class BertEmbedder(Common):
             logging.info(f'Loading {self.mapping} projection tensor from disk.')
             self.projection = torch.load(file_path)
 
-class VecMapEmbedder(Common):
+class VecMapEmbed(CommonScore):
     def __init__(self, device, src_lang, tgt_lang, batch_size):
         self.device = device
         self.src_lang = src_lang
@@ -291,13 +228,13 @@ class VecMapEmbedder(Common):
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
-class XMoverBertAligner(XMoverAligner, BertEmbedder):
+class XMoverBertAlignScore(XMoverAlign, BertEmbed):
     def __init__(
         self,
         model_name="bert-base-multilingual-cased",
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
-        datadir = str(abspath(join(dirname(__file__), 'data'))),
+        datadir = str(abspath(join(dirname(__file__), '../data'))),
         do_lower_case=False,
         use_cosine = False,
         alignment = "awesome",
@@ -309,29 +246,11 @@ class XMoverBertAligner(XMoverAligner, BertEmbedder):
         align_batch_size = 5000
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
+        XMoverAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
                 alignment, datadir)
 
-class RatioMarginBertAligner(RatioMarginAligner, BertEmbedder):
-    def __init__(
-        self,
-        model_name="bert-base-multilingual-cased",
-        mapping="UMD",
-        device="cuda" if cuda_is_available() else "cpu",
-        datadir = str(abspath(join(dirname(__file__), 'data'))),
-        do_lower_case=False,
-        alignment = "awesome",
-        k = 20,
-        remap_size = 2000,
-        embed_batch_size = 128,
-        knn_batch_size = 1000000
-    ):
-        RatioMarginAligner.__init__(self, device, k, knn_batch_size)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                alignment, datadir)
-
-class XMoverVecMapAligner(XMoverAligner, VecMapEmbedder):
+class XMoverVecMapAlignScore(XMoverAlign, VecMapEmbed):
     def __init__(
         self,
         device="cuda" if cuda_is_available() else "cpu",
@@ -345,10 +264,10 @@ class XMoverVecMapAligner(XMoverAligner, VecMapEmbedder):
         align_batch_size = 5000
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverAligner.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        VecMapEmbedder.__init__(self, device, src_lang, tgt_lang, batch_size)
+        XMoverAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
+        VecMapEmbed.__init__(self, device, src_lang, tgt_lang, batch_size)
 
-class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
+class XMoverNMTBertAlignScore(XMoverNMTAlign, BertEmbed):
     def __init__(
         self,
         device="cuda" if cuda_is_available() else "cpu",
@@ -357,7 +276,7 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
-        datadir = str(abspath(join(dirname(__file__), 'data'))),
+        datadir = str(abspath(join(dirname(__file__), '../data'))),
         train_size = 500000,
         align_batch_size = 5000,
         src_lang = "de",
@@ -372,7 +291,7 @@ class XMoverNMTBertAligner(XMoverNMTAligner, BertEmbedder):
         ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverNMTAligner.__init__(self, device, k, n_gram, knn_batch_size, datadir,
+        XMoverNMTAlign.__init__(self, device, k, n_gram, knn_batch_size, datadir,
             train_size, align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
-        BertEmbedder.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
                 alignment, datadir)
