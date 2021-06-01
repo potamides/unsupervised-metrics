@@ -21,6 +21,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 from torch.utils.data import DataLoader
+from .dataset import DATADIR
 
 from datasets import load_dataset
 
@@ -304,7 +305,7 @@ def _train(args=None):
 
     return model, tokenizer
 
-def train(model, source_lang, target_lang, dataset, overwrite, datadir, suffix):
+def train(model, source_lang, target_lang, dataset, overwrite, suffix):
     if "mbart" in model:
         language2mBART = {
             "ar": "ar_AR", "cs": "cs_CZ", "de": "de_DE", "en": "en_XX", "es": "es_XX",
@@ -316,8 +317,8 @@ def train(model, source_lang, target_lang, dataset, overwrite, datadir, suffix):
         target_lang = language2mBART[target_lang]
     args = [
         "--model_name_or_path", model,
-        "--cache_dir", os.path.join(datadir, os.path.basename(model), suffix, "cache"),
-        "--output_dir", os.path.join(datadir, os.path.basename(model), suffix, "output"),
+        "--cache_dir", os.path.join(DATADIR, os.path.basename(model), suffix, "cache"),
+        "--output_dir", os.path.join(DATADIR, os.path.basename(model), suffix, "output"),
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,

@@ -3,7 +3,6 @@ from .xmoverscore import BertEmbed
 from utils.knn import ratio_margin_align
 from torch.nn.functional import cosine_similarity
 from torch.cuda import is_available as cuda_is_available
-from os.path import join, dirname, abspath
 from torch import sum as tsum
 import logging
 
@@ -39,7 +38,6 @@ class RatioMarginBertAlignScore(RatioMarginAlign, BertEmbed):
         model_name="bert-base-multilingual-cased",
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
-        datadir = str(abspath(join(dirname(__file__), '../data'))),
         do_lower_case=False,
         alignment = "awesome",
         k = 20,
@@ -48,5 +46,4 @@ class RatioMarginBertAlignScore(RatioMarginAlign, BertEmbed):
         knn_batch_size = 1000000
     ):
         RatioMarginAlign.__init__(self, device, k, knn_batch_size)
-        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                alignment, datadir)
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)

@@ -11,9 +11,9 @@ from tempfile import NamedTemporaryFile as TempFile
 from mosestokenizer import MosesTokenizer
 path.append(abspath(join(dirname(__file__), 'vecmap')))
 from .vecmap.map_embeddings import main as vecmap
+from .dataset import DATADIR
 
 fasttext_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/"
-datadir = str(abspath(join(dirname(__file__), '../data')))
 
 def padding(arr, pad_token, dtype=torch.long):
     lens = torch.LongTensor([len(a) for a in arr])
@@ -61,8 +61,11 @@ def map_multilingual_embeddings(src_lang, tgt_lang, batch_size, device):
     src_dict, tgt_dict = defaultdict(lambda: torch.zeros(300)), defaultdict(lambda: torch.zeros(300))
     global argv
 
-    # forgive me lord, for i have sinned
-    with TempFile(dir=datadir, buffering=0) as src_map, TempFile(dir=datadir, buffering=0) as tgt_map:
+    # VecMap only provides a commandline interface, however I don't want to
+    # spawn an additional process, since technically it's unnecessary. That's
+    # why I import the main method, add the arguments to sys.argv and then
+    # execute the main method. I'm probably going to programming hell for this.
+    with TempFile(dir=DATADIR, buffering=0) as src_map, TempFile(dir=DATADIR, buffering=0) as tgt_map:
         arguments = ['--batch_size', str(batch_size), '--unsupervised', src_emb, tgt_emb, src_map.name, tgt_map.name]
         if "cuda" in device:
             arguments.insert(0, '--cuda')
@@ -81,16 +84,16 @@ def get_embeddings_file(lang_id):
     filename = f"cc.{lang_id}.300.vec"
     gz_filename = filename + ".gz"
 
-    if isfile(join(datadir, filename)):
-        return join(datadir, filename)
+    if isfile(join(DATADIR, filename)):
+        return join(DATADIR, filename)
 
-    urlretrieve(join(fasttext_url, gz_filename), join(datadir, gz_filename))
+    urlretrieve(join(fasttext_url, gz_filename), join(DATADIR, gz_filename))
 
-    with gopen(join(datadir, gz_filename), 'rb') as f:
-        with open(join(datadir, filename), 'wb') as f_out:
+    with gopen(join(DATADIR, gz_filename), 'rb') as f:
+        with open(join(DATADIR, filename), 'wb') as f_out:
             copyfileobj(f, f_out)
 
-    return join(datadir, filename)
+    return join(DATADIR, filename)
 
 def vecmap_embed(all_sents, lang_dict, lang):
     tokens, idf_weights, embeddings = list(), list(), list()

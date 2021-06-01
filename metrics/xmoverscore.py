@@ -4,8 +4,9 @@ from utils.knn import wcd_align, ratio_margin_align, cosine_align
 from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
 from utils.nmt import train, translate
+from utils.dataset import DATADIR
 from torch.cuda import is_available as cuda_is_available
-from os.path import isfile, join, dirname, abspath
+from os.path import isfile, join
 from json import dumps
 from math import ceil
 from numpy import arange
@@ -14,7 +15,6 @@ from .common import CommonScore
 from re import findall
 import logging
 import torch
-
 
 class XMoverAlign(CommonScore):
     def __init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size):
@@ -82,10 +82,9 @@ class XMoverNMTAlign(XMoverAlign):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(self, device, k, n_gram, knn_batch_size, datadir, train_size,
+    def __init__(self, device, k, n_gram, knn_batch_size, train_size,
         align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine):
         super().__init__(device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        self.datadir = datadir
         self.train_size = train_size
         self.knn_batch_size = knn_batch_size
         self.src_lang = src_lang
@@ -107,7 +106,7 @@ class XMoverNMTAlign(XMoverAlign):
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
     def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=1):
-        file_path, pairs, scores = join(self.datadir, f"mined-{suffix}.json"), list(), list()
+        file_path, pairs, scores = join(DATADIR, f"mined-{suffix}.json"), list(), list()
         if not isfile(file_path) or overwrite:
             logging.info("Obtaining sentence embeddings.")
             source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(source_sents, target_sents)
@@ -138,7 +137,7 @@ class XMoverNMTAlign(XMoverAlign):
 
         logging.info("Training MT model with pseudo parallel data.")
         self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
-                overwrite, self.datadir, suffix)
+                overwrite, suffix)
         self.mt_model.to(self.device)
 
     def translate(self, sentences):
@@ -146,8 +145,7 @@ class XMoverNMTAlign(XMoverAlign):
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class BertEmbed(CommonScore):
-    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment,
-            datadir):
+    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment):
         config = BertConfig.from_pretrained(model_name)
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(model_name, config=config)
@@ -158,7 +156,6 @@ class BertEmbed(CommonScore):
         self.embed_batch_size = embed_batch_size
         self.projection = None
         self.alignment = alignment
-        self.datadir = datadir
 
     def _embed(self, source_sents, target_sents, same_language=False):
         src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
@@ -176,7 +173,7 @@ class BertEmbed(CommonScore):
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
     def remap(self, source_sents, target_sents, suffix="tensor", overwrite=True):
-        file_path = join(self.datadir, f"projection-{suffix}.pt")
+        file_path = join(DATADIR, f"projection-{suffix}.pt")
         if not isfile(file_path) or overwrite:
             logging.info(f'Computing projection tensor for {self.mapping} remapping method.')
             sent_pairs, scores = self.align(source_sents, target_sents)
@@ -234,7 +231,6 @@ class XMoverBertAlignScore(XMoverAlign, BertEmbed):
         model_name="bert-base-multilingual-cased",
         mapping="UMD",
         device="cuda" if cuda_is_available() else "cpu",
-        datadir = str(abspath(join(dirname(__file__), '../data'))),
         do_lower_case=False,
         use_cosine = False,
         alignment = "awesome",
@@ -247,8 +243,7 @@ class XMoverBertAlignScore(XMoverAlign, BertEmbed):
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                alignment, datadir)
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
 
 class XMoverVecMapAlignScore(XMoverAlign, VecMapEmbed):
     def __init__(
@@ -276,7 +271,6 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertEmbed):
         k = 20,
         n_gram = 1,
         knn_batch_size = 1000000,
-        datadir = str(abspath(join(dirname(__file__), '../data'))),
         train_size = 500000,
         align_batch_size = 5000,
         src_lang = "de",
@@ -291,7 +285,6 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertEmbed):
         ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverNMTAlign.__init__(self, device, k, n_gram, knn_batch_size, datadir,
-            train_size, align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
-        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size,
-                alignment, datadir)
+        XMoverNMTAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
+                tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
