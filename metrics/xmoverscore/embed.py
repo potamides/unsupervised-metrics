@@ -39,7 +39,7 @@ class BertEmbed(CommonScore):
 
 class BertRemap(BertEmbed):
     def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment):
-        super().__init__(self, model_name, mapping, device, do_lower_case, embed_batch_size)
+        super().__init__(model_name, mapping, device, do_lower_case, embed_batch_size)
         self.remap_size = remap_size
         self.alignment = alignment
 
