@@ -13,7 +13,7 @@ from mosestokenizer import MosesTokenizer, MosesDetokenizer
 from truecase import get_true_case
 import logging
 
-DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", "~/.cache"), "xmoverscore"))
+DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
 
 class DatasetLoader():

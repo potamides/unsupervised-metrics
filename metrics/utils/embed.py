@@ -2,14 +2,13 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from collections import defaultdict
-from sys import path, argv
-from os.path import join, dirname, abspath, isfile
+from sys import argv
+from os.path import join, isfile
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 from gzip import open as gopen
 from tempfile import NamedTemporaryFile as TempFile
 from mosestokenizer import MosesTokenizer
-path.append(abspath(join(dirname(__file__), 'vecmap')))
 from .vecmap.map_embeddings import main as vecmap
 from .dataset import DATADIR
 
@@ -61,10 +60,11 @@ def map_multilingual_embeddings(src_lang, tgt_lang, batch_size, device):
     src_dict, tgt_dict = defaultdict(lambda: torch.zeros(300)), defaultdict(lambda: torch.zeros(300))
     global argv
 
-    # VecMap only provides a commandline interface, however I don't want to
-    # spawn an additional process, since technically it's unnecessary. That's
-    # why I import the main method, add the arguments to sys.argv and then
-    # execute the main method. I'm probably going to programming hell for this.
+    # VecMap only provides a commandline interface, which means that it is
+    # inconvenient to integrate it into other projects and I'd much rather like
+    # to use it as a library. That's why I import the main method, add the
+    # arguments to sys.argv and then execute the main method. I'm probably
+    # going to programming hell for this.
     with TempFile(dir=DATADIR, buffering=0) as src_map, TempFile(dir=DATADIR, buffering=0) as tgt_map:
         arguments = ['--batch_size', str(batch_size), '--unsupervised', src_emb, tgt_emb, src_map.name, tgt_map.name]
         if "cuda" in device:

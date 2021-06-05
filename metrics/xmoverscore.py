@@ -1,10 +1,10 @@
 from transformers import BertModel, BertTokenizer, BertConfig
-from utils.wmd import word_mover_align, word_mover_score
-from utils.knn import wcd_align, ratio_margin_align, cosine_align
-from utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
-from utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
-from utils.nmt import train, translate
-from utils.dataset import DATADIR
+from .utils.wmd import word_mover_align, word_mover_score
+from .utils.knn import wcd_align, ratio_margin_align, cosine_align
+from .utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
+from .utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
+from .utils.nmt import train, translate
+from .utils.dataset import DATADIR
 from torch.cuda import is_available as cuda_is_available
 from os.path import isfile, join
 from json import dumps
@@ -224,6 +224,41 @@ class VecMapEmbed(CommonScore):
         tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = vecmap_embed(target_sents, self.tgt_dict, self.tgt_lang)
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
+
+class XMoverScore(XMoverAlign, BertEmbed):
+    """
+    The original XMoverScore implementation. Be careful, remapping matrices
+    were trained on parallel data! Provided out of convienence to compare the
+    preformance of self-learning remapping approaches to the supervised
+    original.
+    """
+    def __init__(
+        self,
+        model_name="bert-base-multilingual-cased",
+        mapping="UMD",
+        device="cuda" if cuda_is_available() else "cpu",
+        do_lower_case=False,
+        use_cosine = False,
+        alignment = "awesome",
+        k = 20,
+        n_gram = 1,
+        remap_size = 2000,
+        embed_batch_size = 128,
+        knn_batch_size = 1000000,
+        align_batch_size = 5000
+    ):
+        logging.info("Using device \"%s\" for computations.", device)
+        XMoverAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
+        BertEmbed.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
+
+
+    #Override
+    def score(self, source_sents, target_sents, same_language=False):
+        src_embeddings, src_idf, src_tokens, _, tgt_embeddings, tgt_idf, tgt_tokens, _ = self._embed(source_sents,
+                target_sents, same_language)
+        scores = word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
+                self.n_gram)
+        return scores
 
 class XMoverBertAlignScore(XMoverAlign, BertEmbed):
     def __init__(

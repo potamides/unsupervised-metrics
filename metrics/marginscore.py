@@ -1,6 +1,6 @@
 from .common import CommonScore
 from .xmoverscore import BertEmbed
-from utils.knn import ratio_margin_align
+from .utils.knn import ratio_margin_align
 from torch.nn.functional import cosine_similarity
 from torch.cuda import is_available as cuda_is_available
 from torch import sum as tsum
