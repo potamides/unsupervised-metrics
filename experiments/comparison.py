@@ -10,7 +10,7 @@ source_lang, target_lang = "de", "en"
 def align_tests(mapping="UMD"):
     aligner = XMoverScore(mapping=mapping)
     dataset = DatasetLoader(source_lang, target_lang)
-    eval_src, eval_system, eval_scores = dataset.load("scored-wmt")
+    eval_src, eval_system, eval_scores = dataset.load("scored")
     results = defaultdict(list)
 
     logging.info("Evaluating performance before remapping.")
