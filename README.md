@@ -7,10 +7,6 @@
    ```python
    pip install -e .
    ```
-2. Setup [VecMap](https://github.com/artetxem/vecmap):
-   ```sh
-   git submodule update --init
-   ```
 
 ## Usage
 
@@ -18,6 +14,7 @@
 ./experiments/align.py
 ./experiments/vecmap.py
 ./experiments/nmt.py
+# ...
 ```
 
 ## TODO

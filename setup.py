@@ -7,7 +7,7 @@ setup(name='unsupervised-metrics',
     url='https://github.com/potamides/XMoverAlign',
     author='Jonas Belouadi',
     author_email='jonasjohannesfranz.belouadi@stud.tu-darmstadt.de',
-    packages = find_namespace_packages("metrics"),
+    packages=find_namespace_packages(include=["metrics*"]),
     install_requires=[
         "faiss-gpu==1.6.5",
         "pyemd==0.5.1",

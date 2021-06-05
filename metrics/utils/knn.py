@@ -1,6 +1,7 @@
 from faiss import IndexFlatL2, IndexFlatIP, index_cpu_to_all_gpus, normalize_L2 
 import numpy as np
 
+# Adopted from https://github.com/pytorch/fairseq/blob/master/examples/criss/mining/mine.py
 def knn_sharded(source_data, target_data, k, batch_size, device, use_cosine=False):
     if use_cosine:
         normalize_L2(source_data)

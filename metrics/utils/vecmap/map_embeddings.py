@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import embeddings
-from cupy_utils import *
+from  . import embeddings
+from .cupy_utils import *
 
 import argparse
 import collections
@@ -51,7 +51,7 @@ def topk_mean(m, k, inplace=False):  # TODO Assuming that axis is 1
     return ans / k
 
 
-def main():
+def vecmap(cmd_args=None):
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Map word embeddings in two languages into a shared space')
     parser.add_argument('src_input', help='the input source embeddings')
@@ -108,7 +108,7 @@ def main():
     self_learning_group.add_argument('--stochastic_interval', default=50, type=int, help='stochastic dictionary induction interval (defaults to 50)')
     self_learning_group.add_argument('--log', help='write to a log file in tsv format at each iteration')
     self_learning_group.add_argument('-v', '--verbose', action='store_true', help='write log information to stderr at each iteration')
-    args = parser.parse_args()
+    args = parser.parse_args(cmd_args)
 
     if args.supervised is not None:
         parser.set_defaults(init_dictionary=args.supervised, normalize=['unit', 'center', 'unit'], whiten=True, src_reweight=0.5, trg_reweight=0.5, src_dewhiten='src', trg_dewhiten='trg', batch_size=1000)
@@ -419,4 +419,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    vecmap()
