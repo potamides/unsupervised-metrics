@@ -22,7 +22,7 @@ class RatioMarginAlign(CommonScore):
         indeces, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
                 self.knn_batch_size, self.device)
 
-        sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in enumerate(indeces)]
+        sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in indeces]
         return sent_pairs, scores
 
     def score(self, source_sents, target_sents):

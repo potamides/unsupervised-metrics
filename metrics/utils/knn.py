@@ -61,7 +61,7 @@ def ratio_margin_align(source_data, target_data, k, batch_size, device):
     fwd_scores = score_candidates(src2tgt_sim, src2tgt_ind, src2tgt_mean, tgt2src_mean)
     fwd_best = src2tgt_ind[np.arange(src2tgt_sim.shape[0]), fwd_scores.argmax(axis=1)]
 
-    return fwd_best, fwd_scores.max(axis=1)
+    return np.insert(np.expand_dims(fwd_best, 1), 0, range(len(fwd_best)), 1), fwd_scores.max(axis=1)
 
 def wcd_align(source_data, target_data, k, batch_size, device):
     squared_scores, indeces = knn_sharded(source_data.numpy(), target_data.numpy(), k, batch_size, device)
