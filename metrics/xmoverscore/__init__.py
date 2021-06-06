@@ -83,12 +83,11 @@ class XMoverScore(XMoverLMAlign, BertRemapPretrained):
         use_lm = False,
         k = 20,
         n_gram = 1,
-        model_batch_size = 128,
+        embed_batch_size = 128,
         knn_batch_size = 1000000,
         align_batch_size = 5000,
         lm_weights = [1, 0.1]
     ):
         logging.info("Using device \"%s\" for computations.", device)
-        XMoverLMAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size, model_batch_size,
-            use_lm, lm_weights)
-        BertRemapPretrained.__init__(self, model_name, mapping, device, do_lower_case, model_batch_size)
+        XMoverLMAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size, use_lm, lm_weights)
+        BertRemapPretrained.__init__(self, model_name, mapping, device, do_lower_case, embed_batch_size)

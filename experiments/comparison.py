@@ -33,7 +33,7 @@ def align_tests(mapping="UMD"):
     results["mae"].append(round(mae, 3))
 
     logging.info(f"Evaluating performance with language model.")
-    aligner.remap(source_lang, target_lang)
+    aligner.use_lm = True
     pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
     rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")

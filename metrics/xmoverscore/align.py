@@ -79,10 +79,9 @@ class XMoverLMAlign(XMoverAlign):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(self, device, k, n_gram, knn_batch_size, align_batch_size, use_cosine, lm_batch_size, use_lm, weights):
+    def __init__(self, device, k, n_gram, knn_batch_size, align_batch_size, use_cosine, use_lm, weights):
         super().__init__(device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         self.device = device
-        self.lm_batch_size = lm_batch_size
         self.use_lm = use_lm
         self.weights = weights
 
@@ -94,7 +93,7 @@ class XMoverLMAlign(XMoverAlign):
         """
         wmd_scores = super().score(source_sents, target_sents)
         if self.use_lm:
-            lm_scores = lm_perplexity(target_sents, self.lm_batch_size, self.device)
+            lm_scores = lm_perplexity(target_sents, self.device)
             return (self.weights[0] * array(wmd_scores) + self.weights[1] * array(lm_scores)).tolist()
         else:
             return wmd_scores
@@ -117,6 +116,7 @@ class XMoverNMTAlign(XMoverAlign):
         self.mt_model = None
         self.mt_tokenizer = None
         self.use_cosine = use_cosine
+        self.knn_batch_size = knn_batch_size
 
     #Override
     def score(self, source_sents, target_sents):
@@ -128,21 +128,25 @@ class XMoverNMTAlign(XMoverAlign):
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
     def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=1):
-        file_path, pairs, scores = join(DATADIR, f"mined-{suffix}.json"), list(), list()
+        file_path, batch, batch_size = join(DATADIR, f"mined-{suffix}.json"), 0, self.knn_batch_size
+        pairs, scores = list(), list()
         if not isfile(file_path) or overwrite:
-            logging.info("Obtaining sentence embeddings.")
-            source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(source_sents, target_sents)
-            pairs, scores = list(), list()
-            if self.use_cosine:
-                logging.info("Mining pseudo parallel data with Ratio Margin function.")
-                pairs, scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings, self.k,
-                        self.knn_batch_size, self.device)
-            else:
-                logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-                candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, self.knn_batch_size,
-                        self.device)
-                logging.info("Computing exact Word Mover's Distances for candidates.")
-                pairs, scores = self._memory_efficient_word_mover_align(source_sents, target_sents, candidates)
+            while batch < len(source_sents):
+                logging.info("Obtaining sentence embeddings.")
+                batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
+                batch += batch_size
+                source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(batch_src, batch_tgt)
+                if self.use_cosine:
+                    logging.info("Mining pseudo parallel data with Ratio Margin function.")
+                    batch_pairs, batch_scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings,
+                            self.k, batch_size, self.device)
+                else:
+                    logging.info("Mining pseudo parallel data using Word Centroid Distance.")
+                    candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, batch_size,
+                            self.device)
+                    logging.info("Computing exact Word Mover's Distances for candidates.")
+                    batch_pairs, batch_scores = self._memory_efficient_word_mover_align(batch_src, batch_tgt, candidates)
+                pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
             with open(file_path, "wb") as f:
                 idx = 0
                 for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):

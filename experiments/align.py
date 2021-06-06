@@ -42,6 +42,7 @@ def align_tests(alignment="awesome", mapping="UMD", data="monolingual-align", me
         results["mae"].append(round(mae, 3))
 
     return suffix, tabulate(results, headers="keys", showindex=True)
+
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(*align_tests(alignment="awesome", data="monolingual-align", mapping="UMD"), sep="\n")
 print(*align_tests(alignment="awesome", data="monolingual-align", mapping="CLP"), sep="\n")

@@ -50,5 +50,6 @@ def nmt_tests(metric="cosine"):
 
     return suffix, tabulate(results, headers="keys", showindex=list(range(iterations + 1)) + [f"{iterations} + NMT"])
 
+logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(*nmt_tests(metric="cosine"), sep="\n")
 print(*nmt_tests(metric="wmd"), sep="\n")
