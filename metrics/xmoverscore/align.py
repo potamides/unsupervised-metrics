@@ -134,7 +134,6 @@ class XMoverNMTAlign(XMoverAlign):
             while batch < len(source_sents):
                 logging.info("Obtaining sentence embeddings.")
                 batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
-                batch += batch_size
                 source_sent_embeddings, target_sent_embeddings = self._mean_pool_embed(batch_src, batch_tgt)
                 if self.use_cosine:
                     logging.info("Mining pseudo parallel data with Ratio Margin function.")
@@ -147,6 +146,7 @@ class XMoverNMTAlign(XMoverAlign):
                     logging.info("Computing exact Word Mover's Distances for candidates.")
                     batch_pairs, batch_scores = self._memory_efficient_word_mover_align(batch_src, batch_tgt, candidates)
                 pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
+                batch += batch_size
             with open(file_path, "wb") as f:
                 idx = 0
                 for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):

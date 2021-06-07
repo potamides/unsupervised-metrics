@@ -169,6 +169,7 @@ def awesome_align(sentpairs, model, tokenizer, size, device, projection=None, ma
                 out_tgt = model(ids_tgt.unsqueeze(0).to(device))["hidden_states"][align_layer][0, 1:-1]
 
                 if projection is not None:
+                    projection = projection.to(device)
                     if projection.shape[0] == projection.shape[1]: # CLP
                         out_src = torch.matmul(out_src, projection)
                     else: # UMD
