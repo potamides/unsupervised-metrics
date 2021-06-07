@@ -24,7 +24,7 @@ def convert_words_to_bpe(sent_pairs, tokenizer):
     for (src_sent, tgt_sent) in sent_pairs:
         src_bpe_table, tgt_bpe_table = [], []
         src_sent_bpe, tgt_sent_bpe = [], []
-        
+
         for word in src_sent:
             token = tokenizer.tokenize(word)
             word2bpe_map = []
@@ -40,15 +40,15 @@ def convert_words_to_bpe(sent_pairs, tokenizer):
                 word2bpe_map.append(len(tgt_sent_bpe)+i)
             tgt_sent_bpe.extend(token)
             tgt_bpe_table.append(word2bpe_map)
-            
+
         bpe_para.append([src_sent_bpe, tgt_sent_bpe])
         bpe_table.append([src_bpe_table, tgt_bpe_table])
-        
+
     return bpe_para, bpe_table
 
 
 def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
-        tokenizer, batch_size, device, max_seq_length=175):
+        tokenizer, batch_size, device, layer=12, max_seq_length=175):
     bpe_para, bpe_table = convert_words_to_bpe(sent_pairs, tokenizer)
 
     # filter long/empty sentences
@@ -67,11 +67,11 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
     src_data = TensorDataset(src_input, src_mask)
     src_sampler = SequentialSampler(src_data)
     src_dataloader = DataLoader(src_data, sampler=src_sampler, batch_size=batch_size)
-    
+
     tgt_data = TensorDataset(tgt_input, tgt_mask)
     tgt_sampler = SequentialSampler(tgt_data)
     tgt_dataloader = DataLoader(tgt_data, sampler=tgt_sampler, batch_size=batch_size)
-    
+
     src_embed = []
     tgt_embed = []
 
@@ -81,18 +81,18 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
             input_ids, input_mask = batch
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
-            
-            last_hidden_state = model(input_ids, attention_mask=input_mask)["last_hidden_state"]
-            src_embed.append(last_hidden_state[:,1:].cpu().numpy()) # remove CLS
+
+            hidden_state = model(input_ids, attention_mask=input_mask)["hidden_states"][layer]
+            src_embed.append(hidden_state[:,1:].cpu().numpy()) # remove CLS
 
     with torch.no_grad():
         for batch in tgt_dataloader:
             input_ids, input_mask = batch
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
-            
-            last_hidden_state = model(input_ids, attention_mask=input_mask)["last_hidden_state"]
-            tgt_embed.append(last_hidden_state[:,1:].cpu().numpy())
+
+            hidden_state = model(input_ids, attention_mask=input_mask)["hidden_states"][layer]
+            tgt_embed.append(hidden_state[:,1:].cpu().numpy())
 
     src_embed = np.concatenate(src_embed)
     tgt_embed = np.concatenate(tgt_embed)
@@ -103,7 +103,7 @@ def get_aligned_features_avgbpe(sent_pairs, align_pairs, model,
         for a in pairs:
             if len(fltr_bpe_table[i][0][a[0]]) > 0 and len(fltr_bpe_table[i][1][a[1]]) > 0: # token alignment (0,0)
                 src_word_avg_embed = np.zeros((1, feature_size))
-                
+
                 for j in fltr_bpe_table[i][0][a[0]]:
                     src_word_avg_embed += src_embed[i][j,:]
                 src_matrix[cnt,:] = src_word_avg_embed / len(fltr_bpe_table[i][0][a[0]])
@@ -122,10 +122,10 @@ def fast_align(sent_pairs, tokenizer, size, max_seq_length=100):
     for source_sent, target_sent in sent_pairs:
         sent1 = tokenizer.basic_tokenizer.tokenize(source_sent)
         sent2 = tokenizer.basic_tokenizer.tokenize(target_sent)
-        
+
         if 0 < len(sent1) <= max_seq_length and 0 < len(sent2) <= max_seq_length:
             tokenized_pairs.append((sent1, sent2))
-            
+
         if len(tokenized_pairs) >= size:
             break
 
@@ -142,12 +142,12 @@ def fast_align(sent_pairs, tokenizer, size, max_seq_length=100):
     sym_aligned = [[tuple(map(int, pair.split(b"-"))) for pair in pairs.split()] for pairs in sym_aligned.splitlines()]
     return tokenized_pairs, sym_aligned
 
-def awesome_align(sentpairs, model, tokenizer, size, device, max_seq_length=100):
+def awesome_align(sentpairs, model, tokenizer, size, device, projection=None, max_seq_length=100):
     tokenized_pairs, alignments = list(), list()
     for src, tgt in sentpairs:
         sent_src, sent_tgt = tokenizer.basic_tokenizer.tokenize(src), tokenizer.basic_tokenizer.tokenize(tgt)
         if 0 < len(sent_src) <= max_seq_length and 0 < len(sent_tgt) <= max_seq_length:
-            token_src = [tokenizer.tokenize(word) for word in sent_src] 
+            token_src = [tokenizer.tokenize(word) for word in sent_src]
             token_tgt = [tokenizer.tokenize(word) for word in sent_tgt]
             wid_src = [tokenizer.convert_tokens_to_ids(x) for x in token_src]
             wid_tgt = [tokenizer.convert_tokens_to_ids(x) for x in token_tgt]
@@ -165,8 +165,15 @@ def awesome_align(sentpairs, model, tokenizer, size, device, max_seq_length=100)
             threshold = 1e-3
             model.eval()
             with torch.no_grad():
-                out_src = model(ids_src.unsqueeze(0).to(device), output_hidden_states=True)[2][align_layer][0, 1:-1]
-                out_tgt = model(ids_tgt.unsqueeze(0).to(device), output_hidden_states=True)[2][align_layer][0, 1:-1]
+                out_src = model(ids_src.unsqueeze(0).to(device))["hidden_states"][align_layer][0, 1:-1]
+                out_tgt = model(ids_tgt.unsqueeze(0).to(device))["hidden_states"][align_layer][0, 1:-1]
+
+                if projection is not None:
+                    if projection.shape[0] == projection.shape[1]: # CLP
+                        out_src = torch.matmul(out_src, projection)
+                    else: # UMD
+                        out_src = out_src - (out_src * projection).sum(2, keepdim=True) * \
+                                projection.repeat(out_src.shape[0], out_src.shape[1], 1)
 
                 dot_prod = torch.matmul(out_src.cpu(), out_tgt.transpose(-1, -2).cpu())
 
@@ -194,11 +201,11 @@ def sim_align(sent_pairs, tokenizer, size, device, max_seq_length=100):
     for source_sent, target_sent in sent_pairs:
         sent1 = tokenizer.basic_tokenizer.tokenize(source_sent)
         sent2 = tokenizer.basic_tokenizer.tokenize(target_sent)
-        
+
         if 0 < len(sent1) <= max_seq_length and 0 < len(sent2) <= max_seq_length:
             tokenized_pairs.append((sent1, sent2))
             alignments.append(aligner.get_word_aligns(sent1, sent2)["itermax"])
-            
+
         if len(tokenized_pairs) >= size:
             break
 
@@ -214,6 +221,6 @@ def clp(x, z, orthogonal=True):
     return torch.Tensor(w)
 
 def umd(x, z):
-    *_, v = np.linalg.svd(x - z)  
+    *_, v = np.linalg.svd(x - z)
     v_b = v[0]
     return torch.Tensor(v_b)

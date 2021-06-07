@@ -13,7 +13,7 @@ import torch
 
 class BertEmbed(CommonScore):
     def __init__(self, model_name, mapping, device, do_lower_case, embed_batch_size):
-        config = BertConfig.from_pretrained(model_name)
+        config = BertConfig.from_pretrained(model_name, output_hidden_states=True)
         self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
         self.model = BertModel.from_pretrained(model_name, config=config)
         self.model.to(device)
@@ -60,9 +60,15 @@ class BertRemap(BertEmbed):
                 tokenized_pairs, align_pairs = fast_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
             elif self.alignment == "sim":
                 tokenized_pairs, align_pairs = sim_align(sorted_sent_pairs, self.tokenizer, self.remap_size, self.device)
-            else:
+            else: # awesome
                 tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model, self.tokenizer,
                         self.remap_size, self.device)
+                if self.alignment.endswith("remap"): # awesome-remap
+                    src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
+                            self.model, self.tokenizer, self.embed_batch_size, self.device, 8)
+                    tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model, self.tokenizer,
+                            self.remap_size, self.device,
+                            clp(src_matrix, tgt_matrix) if self.mapping == "CLP" else umd(src_matrix, tgt_matrix))
             src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                     self.model, self.tokenizer, self.embed_batch_size, self.device)
 
