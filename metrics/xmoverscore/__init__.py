@@ -66,6 +66,35 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertRemap):
                 tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine)
         BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
 
+class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
+    def __init__(
+        self,
+        device="cuda" if cuda_is_available() else "cpu",
+        use_cosine = False,
+        use_lm = False,
+        alignment = "awesome",
+        k = 20,
+        n_gram = 1,
+        knn_batch_size = 1000000,
+        train_size = 500000,
+        align_batch_size = 5000,
+        lm_weights = [1, 0.1],
+        src_lang = "de",
+        tgt_lang = "en",
+        model_name="bert-base-multilingual-cased",
+        mt_model_name="facebook/mbart-large-cc25",
+        mapping="UMD",
+        do_lower_case=False,
+        remap_size = 2000,
+        embed_batch_size = 128,
+        translate_batch_size = 16,
+        ratio = 0.5
+    ):
+        logging.info("Using device \"%s\" for computations.", device)
+        XMoverNMTLMAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
+                tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine, use_lm, lm_weights)
+        BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
+
 class XMoverScore(XMoverLMAlign, BertRemapPretrained):
     """
     The original XMoverScore implementation. Be careful, remapping matrices

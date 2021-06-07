@@ -11,7 +11,7 @@ def align_tests(mapping="UMD"):
     aligner = XMoverScore(mapping=mapping)
     dataset = DatasetLoader(source_lang, target_lang)
     eval_src, eval_system, eval_scores = dataset.load("scored")
-    results = defaultdict(list)
+    results, index = defaultdict(list), ["Default", mapping]
 
     logging.info("Evaluating performance before remapping.")
     pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
@@ -32,17 +32,19 @@ def align_tests(mapping="UMD"):
     results["rmse"].append(round(rmse, 3))
     results["mae"].append(round(mae, 3))
 
-    logging.info(f"Evaluating performance with language model.")
-    aligner.use_lm = True
-    pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
-    rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
-    logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
-    results["pearson"].append(round(pearson, 3))
-    results["spearman"].append(round(spearman, 3))
-    results["rmse"].append(round(rmse, 3))
-    results["mae"].append(round(mae, 3))
+    if target_lang == "en":
+        logging.info(f"Evaluating performance with language model.")
+        aligner.use_lm = True
+        index.append(f"{mapping} + LM")
+        pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
+        rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
+        logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
+        results["pearson"].append(round(pearson, 3))
+        results["spearman"].append(round(spearman, 3))
+        results["rmse"].append(round(rmse, 3))
+        results["mae"].append(round(mae, 3))
 
-    return tabulate(results, headers="keys", showindex=["Default", mapping, f"{mapping} + LM"])
+    return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(align_tests(mapping="UMD"))

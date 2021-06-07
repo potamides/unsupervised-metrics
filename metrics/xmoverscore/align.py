@@ -170,3 +170,29 @@ class XMoverNMTAlign(XMoverAlign):
         logging.info("Translating sentences into target language.")
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
+class XMoverNMTLMAlign(XMoverNMTAlign):
+    """
+    Combine NMT and LM XMoverScore extensions.
+    """
+
+    def __init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
+            mt_model_name, translate_batch_size, ratio, use_cosine, use_lm, weights):
+        super().__init__(device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
+                mt_model_name, translate_batch_size, ratio, use_cosine)
+        self.device = device
+        self.use_lm = use_lm
+        self.weights = weights
+
+    #Override
+    def score(self, source_sents, target_sents):
+        """
+        Compute WMD scores on hypotheses and pseudo translations and combine
+        results with perplexity of GPT2 language model. This only makes sense
+        when the hyptheses are in English.
+        """
+        nmt_scores = super().score(source_sents, target_sents)
+        if self.use_lm:
+            lm_scores = lm_perplexity(target_sents, self.device)
+            return (self.weights[0] * array(nmt_scores) + self.weights[1] * array(lm_scores)).tolist()
+        else:
+            return nmt_scores
