@@ -46,6 +46,8 @@ def align_tests(alignment="awesome", mapping="UMD", data="monolingual-align", me
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(*align_tests(alignment="awesome", data="monolingual-align", mapping="UMD"), sep="\n")
 print(*align_tests(alignment="awesome", data="monolingual-align", mapping="CLP"), sep="\n")
+print(*align_tests(alignment="awesome-remap", data="monolingual-align", mapping="UMD"), sep="\n")
+print(*align_tests(alignment="awesome-remap", data="monolingual-align", mapping="CLP"), sep="\n")
 print(*align_tests(alignment="fast", data="monolingual-align", mapping="UMD"), sep="\n")
 print(*align_tests(alignment="fast", data="monolingual-align", mapping="CLP"), sep="\n")
 print(*align_tests(alignment="awesome", data="parallel-align", mapping="UMD"), sep="\n")

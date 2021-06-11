@@ -11,7 +11,7 @@ from pathlib import Path
 from io import TextIOWrapper
 from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
 from truecase import get_true_case
-import logging
+from tqdm import tqdm
 
 DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,7 @@ class DatasetLoader():
     def parallel_data(self):
         return {
             "filenames": (
-                # brute force try both directions, since order doesn't matter
+                # one of these two urls will exist (order doesn't matter)
                 f"news-commentary-v15.{self.source_lang}-{self.target_lang}.tsv.gz",
                 f"news-commentary-v15.{self.target_lang}-{self.source_lang}.tsv.gz"
             ),
@@ -78,17 +78,23 @@ class DatasetLoader():
             "samples": 1000,
         }
 
-    def download(_, dataset):
-        logging.info(f"Checking datasets.")
+    def download(self, dataset):
         if "filename" in dataset and "url" in dataset:
             identifiers = ((dataset["filename"], dataset["url"]),)
         else:
             identifiers = zip(dataset["filenames"], dataset["urls"])
         for filename, url in identifiers:
+            def progress(b=1, bsize=1, tsize=None):
+                if not hasattr(self, "pbar"):
+                    self.pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=f"Downloading {filename} dataset")
+                if tsize is not None:
+                    self.pbar.total = tsize
+                return self.pbar.update(b * bsize - self.pbar.n)
+
             if not isfile(join(DATADIR, filename)):
                 try:
-                    urlretrieve(join(url, filename), join(DATADIR, filename))
-                    logging.info(f"Downloaded {filename} dataset.")
+                    urlretrieve(join(url, filename), join(DATADIR, filename), progress)
+                    del self.pbar
                 except URLError:
                     pass
 

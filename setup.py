@@ -9,6 +9,7 @@ setup(name='unsupervised-metrics',
     author_email='jonasjohannesfranz.belouadi@stud.tu-darmstadt.de',
     packages=find_namespace_packages(include=["metrics*"]),
     install_requires=[
+        "tqdm==4.49.0",
         "faiss-gpu==1.6.5",
         "pyemd==0.5.1",
         "torch==1.7.1",
