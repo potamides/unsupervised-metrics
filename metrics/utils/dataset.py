@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from csv import reader, QUOTE_NONE
-from itertools import islice
+from itertools import islice, chain
 from os import getenv
 from os.path import isfile, join
 from gzip import open as gopen
@@ -9,7 +9,7 @@ from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
 from io import TextIOWrapper
-from mosestokenizer import MosesTokenizer, MosesDetokenizer
+from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
 from truecase import get_true_case
 import logging
 
@@ -27,8 +27,8 @@ class DatasetLoader():
     def monolingual_data(self):
         return {
             "filenames": (
-                f"news.2020.{self.source_lang}.shuffled.deduped.gz",
-                f"news.2020.{self.target_lang}.shuffled.deduped.gz"
+                f"news.2019.{self.source_lang}.shuffled.deduped.gz",
+                f"news.2019.{self.target_lang}.shuffled.deduped.gz"
             ),
             "urls": (
                 f"http://data.statmt.org/news-crawl/{self.source_lang}",
@@ -70,7 +70,7 @@ class DatasetLoader():
             "samples": 560,
         }
     @property
-    def mlqe_eval_data(self): 
+    def mlqe_eval_data(self):
         return {
             "filename": f"{self.source_lang}-{self.target_lang}-test.tar.gz",
             "url": "https://github.com/sheffieldnlp/mlqe-pe/raw/master/data/direct-assessments/test",
@@ -110,15 +110,16 @@ class DatasetLoader():
             mono_source, mono_target= list(), list()
             mpath, mfiles = DATADIR, self.monolingual_data["filenames"]
             with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g, \
-                MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize:        
+                MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize, \
+                MosesSentenceSplitter(self.source_lang) as src_split, MosesSentenceSplitter(self.target_lang) as tgt_split:
                 collected_src_samples, collected_tgt_samples = 0, 0
-                for src in f:
+                for src in chain.from_iterable(map(lambda line: src_split([line]), f)):
                     if self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
                         mono_source.append(src.strip())
                         collected_src_samples += 1
                         if collected_src_samples >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
                             break
-                for tgt in g:
+                for tgt in chain.from_iterable(map(lambda line: tgt_split([line]), g)):
                     if self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
                         mono_target.append(tgt.strip())
                         collected_tgt_samples += 1

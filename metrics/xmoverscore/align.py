@@ -103,8 +103,8 @@ class XMoverNMTAlign(XMoverAlign):
     Able to mine data to train an NMT model, which is then combined with the score.
     """
 
-    def __init__(self, device, k, n_gram, knn_batch_size, train_size,
-        align_batch_size, src_lang, tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine):
+    def __init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
+            mt_model_name, translate_batch_size, ratio, use_cosine, mine_batch_size):
         super().__init__(device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         self.train_size = train_size
         self.knn_batch_size = knn_batch_size
@@ -116,7 +116,7 @@ class XMoverNMTAlign(XMoverAlign):
         self.mt_model = None
         self.mt_tokenizer = None
         self.use_cosine = use_cosine
-        self.knn_batch_size = knn_batch_size
+        self.mine_batch_size = mine_batch_size
 
     #Override
     def score(self, source_sents, target_sents):
@@ -128,7 +128,7 @@ class XMoverNMTAlign(XMoverAlign):
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
     def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=1):
-        file_path, batch, batch_size = join(DATADIR, f"mined-{suffix}.json"), 0, self.knn_batch_size
+        file_path, batch, batch_size = join(DATADIR, f"mined-{suffix}.json"), 0, self.mine_batch_size
         pairs, scores = list(), list()
         if not isfile(file_path) or overwrite:
             while batch < len(source_sents):
@@ -138,10 +138,10 @@ class XMoverNMTAlign(XMoverAlign):
                 if self.use_cosine:
                     logging.info("Mining pseudo parallel data with Ratio Margin function.")
                     batch_pairs, batch_scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings,
-                            self.k, batch_size, self.device)
+                            self.k, self.knn_batch_size, self.device)
                 else:
                     logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-                    candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, batch_size,
+                    candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, self.knn_batch_size,
                             self.device)
                     logging.info("Computing exact Word Mover's Distances for candidates.")
                     batch_pairs, batch_scores = self._memory_efficient_word_mover_align(batch_src, batch_tgt, candidates)
@@ -176,9 +176,9 @@ class XMoverNMTLMAlign(XMoverNMTAlign):
     """
 
     def __init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
-            mt_model_name, translate_batch_size, ratio, use_cosine, use_lm, weights):
+            mt_model_name, translate_batch_size, ratio, use_cosine, mine_batch_size, use_lm, weights):
         super().__init__(device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
-                mt_model_name, translate_batch_size, ratio, use_cosine)
+                mt_model_name, translate_batch_size, ratio, use_cosine, mine_batch_size)
         self.device = device
         self.use_lm = use_lm
         self.weights = weights

@@ -165,18 +165,18 @@ def awesome_align(sentpairs, model, tokenizer, size, device, projection=None, ma
             threshold = 1e-3
             model.eval()
             with torch.no_grad():
-                out_src = model(ids_src.unsqueeze(0).to(device))["hidden_states"][align_layer][0, 1:-1]
-                out_tgt = model(ids_tgt.unsqueeze(0).to(device))["hidden_states"][align_layer][0, 1:-1]
+                out_src = model(ids_src.unsqueeze(0).to(device))["hidden_states"][align_layer]
+                out_tgt = model(ids_tgt.unsqueeze(0).to(device))["hidden_states"][align_layer]
 
                 if projection is not None:
                     projection = projection.to(device)
-                    if projection.shape[0] == projection.shape[1]: # CLP
+                    if projection.ndim == 2: # CLP
                         out_src = torch.matmul(out_src, projection)
                     else: # UMD
                         out_src = out_src - (out_src * projection).sum(2, keepdim=True) * \
                                 projection.repeat(out_src.shape[0], out_src.shape[1], 1)
 
-                dot_prod = torch.matmul(out_src.cpu(), out_tgt.transpose(-1, -2).cpu())
+                dot_prod = torch.matmul(out_src[0, 1:-1].cpu(), out_tgt[0, 1:-1].transpose(-1, -2).cpu())
 
                 softmax_srctgt = torch.nn.Softmax(dim=-1)(dot_prod)
                 softmax_tgtsrc = torch.nn.Softmax(dim=-2)(dot_prod)
