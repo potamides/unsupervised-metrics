@@ -23,17 +23,17 @@ class XMoverAlign(CommonScore):
         self.align_batch_size = align_batch_size
 
     def _mean_pool_embed(self, source_sents, target_sents):
-        source_sent_embeddings, target_sent_embeddings, idx  = list(), list(), 0
+        source_sent_embeddings = torch.empty(len(source_sents), 768)
+        target_sent_embeddings = torch.empty(len(target_sents), 768)
+        idx = 0
         while idx < max(len(source_sents), len(target_sents)):
             src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
                 source_sents[idx:idx + self.align_batch_size], target_sents[idx:idx + self.align_batch_size])
-            if len(src_embeddings) > 0:
-                source_sent_embeddings.append(torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1))
-            if len(tgt_embeddings) > 0:
-                target_sent_embeddings.append(torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1))
+            source_sent_embeddings[idx:idx + len(src_embeddings)] = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
+            target_sent_embeddings[idx:idx + len(tgt_embeddings)] = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
             idx += self.align_batch_size
 
-        return torch.cat(source_sent_embeddings), torch.cat(target_sent_embeddings)
+        return source_sent_embeddings, target_sent_embeddings
 
     def _memory_efficient_word_mover_align(self, source_sents, target_sents, candidates):
         pairs, scores, idx, k = list(), list(), 0, candidates.shape[1]
