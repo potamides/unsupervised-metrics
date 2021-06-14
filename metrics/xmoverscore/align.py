@@ -145,6 +145,7 @@ class XMoverNMTAlign(XMoverAlign):
                             self.device)
                     logging.info("Computing exact Word Mover's Distances for candidates.")
                     batch_pairs, batch_scores = self._memory_efficient_word_mover_align(batch_src, batch_tgt, candidates)
+                del source_sent_embeddings, target_sent_embeddings
                 pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
                 batch += batch_size
             with open(file_path, "wb") as f:
