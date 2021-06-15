@@ -37,7 +37,7 @@ def nmt_tests(metric="cosine"):
         results["mae"].append(round(mae, 3))
 
     mono_src, mono_tgt = dataset.load("monolingual-train")
-    aligner.train(mono_src, mono_tgt, suffix=suffix + f"-{iterations}", overwrite=False)
+    aligner.train(mono_src, mono_tgt, suffix=suffix+f"-{iterations}", overwrite=False, k=5 if metric=="cosine" else 1)
 
     logging.info("Evaluating performance with NMT model.")
     pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)

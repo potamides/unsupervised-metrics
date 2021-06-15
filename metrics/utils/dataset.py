@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from csv import reader, QUOTE_NONE
-from itertools import islice, chain
+from itertools import islice
 from os import getenv
 from os.path import isfile, join
 from gzip import open as gopen
@@ -12,12 +12,34 @@ from io import TextIOWrapper
 from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
 from truecase import get_true_case
 from tqdm import tqdm
+from logging import warn
+from fasttext import FastText, load_model
 
 DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
 
+class LangDetect():
+    url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/"
+    
+    def __init__(self, compress=False):
+        # fixes https://github.com/facebookresearch/fastText/issues/1067 for the time being
+        FastText.eprint = lambda _: None
+        self.model = self.load_model("lid.176.ftz" if compress else "lid.176.bin")
+
+    def load_model(self, name):
+        target_path = join(DATADIR, name)
+        if not isfile(target_path):
+            urlretrieve(join(self.url, name), target_path)
+        return load_model(target_path)
+
+    def detect(self, text, return_score=False):
+        labels, scores = self.model.predict(text)
+        label = labels[0].removeprefix("__label__")
+        score = min(float(scores[0]), 1.0)
+        return (label, score) if return_score else label
+
 class DatasetLoader():
-    def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=80):
+    def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=50):
         self.source_lang = source_language
         self.target_lang = target_language
         self.min_monolingual_sent_len = min_monolingual_sent_len
@@ -113,24 +135,30 @@ class DatasetLoader():
 
         elif name in ["monolingual-align", "monolingual-train"]:
             self.download(self.monolingual_data)
-            mono_source, mono_target= list(), list()
+            mono_source, mono_target, langdetect = list(), list(), LangDetect()
             mpath, mfiles = DATADIR, self.monolingual_data["filenames"]
             with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g, \
                 MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize, \
                 MosesSentenceSplitter(self.source_lang) as src_split, MosesSentenceSplitter(self.target_lang) as tgt_split:
                 collected_src_samples, collected_tgt_samples = 0, 0
-                for src in chain.from_iterable(map(lambda line: src_split([line]), f)):
-                    if self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
+                for src in f:
+                    if len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
+                            and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
                         mono_source.append(src.strip())
                         collected_src_samples += 1
                         if collected_src_samples >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
                             break
-                for tgt in chain.from_iterable(map(lambda line: tgt_split([line]), g)):
-                    if self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
+                else:
+                    warn(f"Only obtained {len(mono_source)} source sentences.")
+                for tgt in g:
+                    if len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
+                            and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
                         mono_target.append(tgt.strip())
                         collected_tgt_samples += 1
                         if collected_tgt_samples >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
                             break
+                else:
+                    warn(f"Only obtained {len(mono_target)} target sentences.")
             return mono_source, mono_target
 
         elif name in ["scored", "scored-mlqe", "scored-wmt"]:

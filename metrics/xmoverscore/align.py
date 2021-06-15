@@ -127,7 +127,7 @@ class XMoverNMTAlign(XMoverAlign):
             mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [(1 - self.ratio) * score + self.ratio * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=1):
+    def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=None):
         file_path, batch, batch_size = join(DATADIR, f"mined-{suffix}.json"), 0, self.mine_batch_size
         pairs, scores = list(), list()
         if not isfile(file_path) or overwrite:
@@ -138,11 +138,11 @@ class XMoverNMTAlign(XMoverAlign):
                 if self.use_cosine:
                     logging.info("Mining pseudo parallel data with Ratio Margin function.")
                     batch_pairs, batch_scores = ratio_margin_align(source_sent_embeddings, target_sent_embeddings,
-                            self.k, self.knn_batch_size, self.device)
+                            self.k if k is None else k, self.knn_batch_size, self.device)
                 else:
                     logging.info("Mining pseudo parallel data using Word Centroid Distance.")
-                    candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, k, self.knn_batch_size,
-                            self.device)
+                    candidates, _ = wcd_align(source_sent_embeddings, target_sent_embeddings, self.k if k is None else k,
+                            self.knn_batch_size, self.device)
                     logging.info("Computing exact Word Mover's Distances for candidates.")
                     batch_pairs, batch_scores = self._memory_efficient_word_mover_align(batch_src, batch_tgt, candidates)
                 del source_sent_embeddings, target_sent_embeddings
