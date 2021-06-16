@@ -33,7 +33,7 @@ class LangDetect():
         return load_model(target_path)
 
     def detect(self, text, return_score=False):
-        labels, scores = self.model.predict(text)
+        labels, scores = self.model.predict(text.strip())
         label = labels[0].removeprefix("__label__")
         score = min(float(scores[0]), 1.0)
         return (label, score) if return_score else label
