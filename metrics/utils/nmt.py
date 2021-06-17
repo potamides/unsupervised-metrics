@@ -211,7 +211,7 @@ def _train(args=None):
     data_files = {}
     data_files["train"] = data_args.train_file
     extension = data_args.train_file.split(".")[-1]
-    datasets = load_dataset(extension, data_files=data_files)
+    datasets = load_dataset(extension, data_files=data_files, download_mode="force_redownload")
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
     # https://huggingface.co/docs/datasets/loading_datasets.html
 
