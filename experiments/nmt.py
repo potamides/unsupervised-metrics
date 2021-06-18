@@ -20,10 +20,10 @@ def nmt_tests(metric="cosine"):
     pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
     rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
-    results["pearson"].append(round(pearson, 3))
-    results["spearman"].append(round(spearman, 3))
-    results["rmse"].append(round(rmse, 3))
-    results["mae"].append(round(mae, 3))
+    results["pearson"].append(round(100 * pearson, 2))
+    results["spearman"].append(round(100 * spearman, 2))
+    results["rmse"].append(round(100 * rmse, 2))
+    results["mae"].append(round(100 * mae, 2))
 
     for iteration in range(1, iterations + 1):
         logging.info(f"Remapping iteration {iteration}.")
@@ -31,10 +31,23 @@ def nmt_tests(metric="cosine"):
         pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
         rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
-        results["pearson"].append(round(pearson, 3))
-        results["spearman"].append(round(spearman, 3))
-        results["rmse"].append(round(rmse, 3))
-        results["mae"].append(round(mae, 3))
+        results["pearson"].append(round(100 * pearson, 2))
+        results["spearman"].append(round(100 * spearman, 2))
+        results["rmse"].append(round(100 * rmse, 2))
+        results["mae"].append(round(100 * mae, 2))
+
+    if target_lang == "en":
+        logging.info(f"Evaluating performance with language model.")
+        aligner.use_lm = True
+        index.append(f"{iterations} + LM")
+        pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
+        rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
+        aligner.use_lm = False
+        logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
+        results["pearson"].append(round(100 * pearson, 2))
+        results["spearman"].append(round(100 * spearman, 2))
+        results["rmse"].append(round(100 * rmse, 2))
+        results["mae"].append(round(100 * mae, 2))
 
     mono_src, mono_tgt = dataset.load("monolingual-train")
     aligner.train(mono_src, mono_tgt, suffix=suffix+f"-{iterations}", overwrite=False, k=5 if metric=="cosine" else 1)
@@ -43,22 +56,22 @@ def nmt_tests(metric="cosine"):
     pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
     rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
-    results["pearson"].append(round(pearson, 3))
-    results["spearman"].append(round(spearman, 3))
-    results["rmse"].append(round(rmse, 3))
-    results["mae"].append(round(mae, 3))
+    results["pearson"].append(round(100 * pearson, 2))
+    results["spearman"].append(round(100 * spearman, 2))
+    results["rmse"].append(round(100 * rmse, 2))
+    results["mae"].append(round(100 * mae, 2))
 
     if target_lang == "en":
-        logging.info(f"Evaluating performance with language model.")
+        logging.info(f"Evaluating performance with NMT and language model.")
         aligner.use_lm = True
         index.append(f"{iterations} + NMT + LM")
         pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
         rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
-        results["pearson"].append(round(pearson, 3))
-        results["spearman"].append(round(spearman, 3))
-        results["rmse"].append(round(rmse, 3))
-        results["mae"].append(round(mae, 3))
+        results["pearson"].append(round(100 * pearson, 2))
+        results["spearman"].append(round(100 * spearman, 2))
+        results["rmse"].append(round(100 * rmse, 2))
+        results["mae"].append(round(100 * mae, 2))
 
     return suffix, tabulate(results, headers="keys", showindex=index)
 

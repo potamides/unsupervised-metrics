@@ -9,7 +9,6 @@ from math import ceil
 from numpy import arange, array
 from nltk.metrics.distance import edit_distance
 from ..common import CommonScore
-from re import findall
 import logging
 import torch
 
@@ -152,10 +151,7 @@ class XMoverNMTAlign(XMoverAlign):
                 idx = 0
                 for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
                     src_sent, tgt_sent = source_sents[src], target_sents[tgt]
-                    if (
-                        edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
-                        and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
-                    ):
+                    if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
                         line = { "translation": { self.src_lang: src_sent, self.tgt_lang: tgt_sent} }
                         f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
                         idx += 1

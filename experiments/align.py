@@ -22,11 +22,11 @@ def align_tests(alignment="awesome", mapping="UMD", data="monolingual-align", me
     precision = aligner.precision(parallel_src, parallel_tgt)
     rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, Precision @ 1: {precision}, RMSE: {rmse}, MAE: {mae}")
-    results["pearson"].append(round(pearson, 3))
-    results["spearman"].append(round(spearman, 3))
-    results["precision"].append(round(precision, 3))
-    results["rmse"].append(round(rmse, 3))
-    results["mae"].append(round(mae, 3))
+    results["pearson"].append(round(100 * pearson, 2))
+    results["spearman"].append(round(100 * spearman, 2))
+    results["precision"].append(round(100 * precision, 2))
+    results["rmse"].append(round(100 * rmse, 2))
+    results["mae"].append(round(100 * mae, 2))
 
     for iteration in range(1, iterations + 1):
         logging.info(f"Remapping iteration {iteration}.")
@@ -35,11 +35,11 @@ def align_tests(alignment="awesome", mapping="UMD", data="monolingual-align", me
         precision = aligner.precision(parallel_src, parallel_tgt)
         rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, Precision @ 1: {precision}, RMSE: {rmse}, MAE: {mae}")
-        results["pearson"].append(round(pearson, 3))
-        results["spearman"].append(round(spearman, 3))
-        results["precision"].append(round(precision, 3))
-        results["rmse"].append(round(rmse, 3))
-        results["mae"].append(round(mae, 3))
+        results["pearson"].append(round(100 * pearson, 2))
+        results["spearman"].append(round(100 * spearman, 2))
+        results["precision"].append(round(100 * precision, 2))
+        results["rmse"].append(round(100 * rmse, 2))
+        results["mae"].append(round(100 * mae, 2))
 
     return suffix, tabulate(results, headers="keys", showindex=True)
 

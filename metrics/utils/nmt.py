@@ -189,7 +189,8 @@ def _train(args=None):
     if os.path.isdir(training_args.output_dir) and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
 
-        if len(list(filter(os.path.isfile, os.listdir(training_args.output_dir)))) > 0:
+
+        if os.path.isfile(os.path.join(training_args.output_dir, 'config.json')):
             logger.info(
                 f"Output directory ({training_args.output_dir}) exists already and is not empty. "
                 "Skipping training and returning pretrained models."

@@ -5,7 +5,6 @@ from ..utils.dataset import DATADIR
 from os.path import isfile, join
 from nltk.metrics.distance import edit_distance
 from ..common import CommonScore
-from re import findall
 from numpy import loadtxt
 from urllib.request import urlopen
 import logging
@@ -50,10 +49,7 @@ class BertRemap(BertEmbed):
             sent_pairs, scores = self.align(source_sents, target_sents)
             sorted_sent_pairs = list()
             for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
-                if (
-                    edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5
-                    and set(findall("[0-9]+", src_sent)) == set(findall("[0-9]+",tgt_sent))
-                ):
+                if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
                     sorted_sent_pairs.append((src_sent, tgt_sent))
 
             if self.alignment == "fast":
