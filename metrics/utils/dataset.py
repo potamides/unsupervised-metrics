@@ -13,6 +13,7 @@ from io import TextIOWrapper
 from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
 from truecase import get_true_case
 from tqdm import tqdm
+from tqdm.utils import CallbackIOWrapper
 from logging import warn
 from fasttext import FastText, load_model
 
@@ -132,13 +133,14 @@ class DatasetLoader():
                 try:
                     if "size" in dataset:
                         with urlopen(join(url, filename)) as f, open(join(DATADIR, filename), "wb") as g:
-                            print(f"Downloading {filename} dataset") # TODO: also integrate tqdm progress bar
-                            g.write(f.read(dataset["size"]))
+                            progress()
+                            g.write(CallbackIOWrapper(self.pbar.update, f, "read").read(dataset["size"]))
                     else:
                         urlretrieve(join(url, filename), join(DATADIR, filename), progress)
-                        del self.pbar
-                except URLError:
-                    pass
+                    del self.pbar
+                except URLError as e:
+                    if e.status != 404:
+                        raise
 
     def load(self, name):
         if name in ["parallel", "parallel-align"]:
