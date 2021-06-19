@@ -5,14 +5,13 @@ from os import getenv
 from os.path import isfile, join
 from gzip import open as gopen
 from tarfile import open as topen
-from urllib.request import urlretrieve, urlopen
+from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
 from io import TextIOWrapper
 from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
 from truecase import get_true_case
 from tqdm import tqdm
-from tqdm.utils import CallbackIOWrapper
 from logging import warn
 from fasttext import FastText, load_model
 
@@ -155,7 +154,7 @@ class DatasetLoader():
                     with gopen(join(mpath, mfiles[1]), "rt") as g, MosesTokenizer(self.target_lang) as tgt_tokenize, \
                     MosesSentenceSplitter(self.target_lang, False) as tgt_split:
                         for tgt in g:
-                            if len(mono_target) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
+                            if len(mono_target) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
                             and len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
                             and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
                                 mono_target.add(tgt.strip())
