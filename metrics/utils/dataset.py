@@ -185,7 +185,7 @@ class DatasetLoader():
 
         elif name in ["monolingual-align", "monolingual-train"]:
             self.download(self.monolingual_data)
-            mono_source, mono_target, lines, langdetect = list(), list(), list(), LangDetect()
+            mono_source, mono_target, lines, langdetect = set(), set(), list(), LangDetect()
             mpath, mfiles = DATADIR, self.monolingual_data["filenames"]
             with xopen(join(mpath, mfiles[0])) as f, xopen(join(mpath, mfiles[1])) as g, \
                 MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize, \
@@ -196,7 +196,8 @@ class DatasetLoader():
                             for sentence in src_split(lines):
                                 if langdetect.detect(sentence) == self.source_lang and sentence not in mono_source\
                                     and self.min_monolingual_sent_len <= len(src_tokenize(sentence)) <= self.max_monolingual_sent_len:
-                                    mono_source.append(sentence)
+                                    mono_source.add(sentence)
+                                    print(len(mono_source))
                             if len(mono_source) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
                                 break
                             lines.clear()
@@ -212,7 +213,7 @@ class DatasetLoader():
                             for sentence in tgt_split(lines):
                                 if langdetect.detect(sentence) == self.target_lang and sentence not in mono_target\
                                     and self.min_monolingual_sent_len <= len(tgt_tokenize(sentence)) <= self.max_monolingual_sent_len:
-                                    mono_target.append(sentence)
+                                    mono_target.add(sentence)
                             if len(mono_target) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
                                 break
                             lines.clear()
@@ -222,7 +223,7 @@ class DatasetLoader():
                         warn(f"Only obtained {len(mono_target)} sentences")
                 except EOFError:
                     warn(f"Only obtained {len(mono_target)} sentences")
-            return mono_source, mono_target
+            return list(mono_source), list(mono_target)
 
         elif name in ["scored", "scored-mlqe", "scored-wmt"]:
             eval_source, eval_system, eval_scores = list(), list(), list()
