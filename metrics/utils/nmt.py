@@ -304,7 +304,8 @@ def _train(args=None):
     trainer.log_metrics("train", metrics)
     trainer.save_state()
 
-    return model, tokenizer
+    return load_model_and_tokenizer(training_args.output_dir, data_args.source_lang,
+            data_args.target_lang, model_args.use_fast_tokenizer, model_args.cache_dir)
 
 def train(model, source_lang, target_lang, dataset, overwrite, suffix):
     if "mbart" in model:

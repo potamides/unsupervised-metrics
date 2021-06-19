@@ -22,8 +22,8 @@ def nmt_tests(metric="cosine"):
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
-    results["rmse"].append(round(100 * rmse, 2))
-    results["mae"].append(round(100 * mae, 2))
+    results["rmse"].append(round(rmse, 2))
+    results["mae"].append(round(mae, 2))
 
     for iteration in range(1, iterations + 1):
         logging.info(f"Remapping iteration {iteration}.")
@@ -33,8 +33,8 @@ def nmt_tests(metric="cosine"):
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
         results["pearson"].append(round(100 * pearson, 2))
         results["spearman"].append(round(100 * spearman, 2))
-        results["rmse"].append(round(100 * rmse, 2))
-        results["mae"].append(round(100 * mae, 2))
+        results["rmse"].append(round(rmse, 2))
+        results["mae"].append(round(mae, 2))
 
     if target_lang == "en":
         logging.info(f"Evaluating performance with language model.")
@@ -46,8 +46,8 @@ def nmt_tests(metric="cosine"):
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
         results["pearson"].append(round(100 * pearson, 2))
         results["spearman"].append(round(100 * spearman, 2))
-        results["rmse"].append(round(100 * rmse, 2))
-        results["mae"].append(round(100 * mae, 2))
+        results["rmse"].append(round(rmse, 2))
+        results["mae"].append(round(mae, 2))
 
     mono_src, mono_tgt = dataset.load("monolingual-train")
     aligner.train(mono_src, mono_tgt, suffix=suffix+f"-{iterations}", overwrite=False, k=5 if metric=="cosine" else 1)
@@ -58,8 +58,8 @@ def nmt_tests(metric="cosine"):
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
-    results["rmse"].append(round(100 * rmse, 2))
-    results["mae"].append(round(100 * mae, 2))
+    results["rmse"].append(round(rmse, 2))
+    results["mae"].append(round(mae, 2))
 
     if target_lang == "en":
         logging.info(f"Evaluating performance with NMT and language model.")
@@ -70,8 +70,8 @@ def nmt_tests(metric="cosine"):
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
         results["pearson"].append(round(100 * pearson, 2))
         results["spearman"].append(round(100 * spearman, 2))
-        results["rmse"].append(round(100 * rmse, 2))
-        results["mae"].append(round(100 * mae, 2))
+        results["rmse"].append(round(rmse, 2))
+        results["mae"].append(round(mae, 2))
 
     return suffix, tabulate(results, headers="keys", showindex=index)
 

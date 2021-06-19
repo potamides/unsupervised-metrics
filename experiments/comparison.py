@@ -19,8 +19,8 @@ def align_tests(mapping="UMD"):
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
-    results["rmse"].append(round(100 * rmse, 2))
-    results["mae"].append(round(100 * mae, 2))
+    results["rmse"].append(round(rmse, 2))
+    results["mae"].append(round(mae, 2))
 
     logging.info(f"Evaluating performance after remapping.")
     aligner.remap(source_lang, target_lang)
@@ -29,8 +29,8 @@ def align_tests(mapping="UMD"):
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
-    results["rmse"].append(round(100 * rmse, 2))
-    results["mae"].append(round(100 * mae, 2))
+    results["rmse"].append(round(rmse, 2))
+    results["mae"].append(round(mae, 2))
 
     if target_lang == "en":
         logging.info(f"Evaluating performance with language model.")
@@ -41,8 +41,8 @@ def align_tests(mapping="UMD"):
         logging.info(f"Pearson: {pearson}, Spearman: {spearman}, RMSE: {rmse}, MAE: {mae}")
         results["pearson"].append(round(100 * pearson, 2))
         results["spearman"].append(round(100 * spearman, 2))
-        results["rmse"].append(round(100 * rmse, 2))
-        results["mae"].append(round(100 * mae, 2))
+        results["rmse"].append(round(rmse, 2))
+        results["mae"].append(round(mae, 2))
 
     return tabulate(results, headers="keys", showindex=index)
 

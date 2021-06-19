@@ -21,8 +21,8 @@ def vecmap_tests():
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
     results["precision"].append(round(100 * precision, 2))
-    results["rmse"].append(round(100 * rmse, 2))
-    results["mae"].append(round(100 * mae, 2))
+    results["rmse"].append(round(rmse, 2))
+    results["mae"].append(round(mae, 2))
 
     return f"{source_lang}-{target_lang}-vecmap", tabulate(results, headers="keys")
 
