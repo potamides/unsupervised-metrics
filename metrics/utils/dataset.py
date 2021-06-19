@@ -5,7 +5,6 @@ from os import getenv
 from os.path import isfile, join
 from gzip import open as gopen
 from tarfile import open as topen
-from lzma import open as xopen
 from urllib.request import urlretrieve, urlopen
 from urllib.error import URLError
 from pathlib import Path
@@ -41,7 +40,7 @@ class LangDetect():
         return (label, score) if return_score else label
 
 class DatasetLoader():
-    def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=30):
+    def __init__(self, source_language, target_language, min_monolingual_sent_len=0, max_monolingual_sent_len=30):
         self.source_lang = source_language
         self.target_lang = target_language
         self.min_monolingual_sent_len = min_monolingual_sent_len
@@ -51,27 +50,14 @@ class DatasetLoader():
     def monolingual_data(self):
         return {
             "filenames": (
-                f"{self.source_lang}.txt.xz",
-                f"{self.target_lang}.txt.xz"
-            ),
-            "urls": (
-                "http://data.statmt.org/cc-100",
-                "http://data.statmt.org/cc-100"
-            ),
-            "size": 4 * 1024 ** 3,
-            "samples": (40000, 10000000),
-        }
-    @property
-    def news_monolingual_data(self):
-        return {
-            "filenames": (
-                f"news.2019.{self.source_lang}.shuffled.deduped.gz",
-                f"news.2019.{self.target_lang}.shuffled.deduped.gz"
+                f"news.{{}}.{self.source_lang}.shuffled.deduped.gz",
+                f"news.{{}}.{self.target_lang}.shuffled.deduped.gz"
             ),
             "urls": (
                 f"http://data.statmt.org/news-crawl/{self.source_lang}",
                 f"http://data.statmt.org/news-crawl/{self.target_lang}"
             ),
+            "versions": list(range(2007, 2021)),
             "samples": (40000, 10000000),
         }
     @property
@@ -116,12 +102,14 @@ class DatasetLoader():
             "samples": 1000,
         }
 
-    def download(self, dataset):
+    def download(self, dataset, version=None):
         if "filename" in dataset and "url" in dataset:
             identifiers = ((dataset["filename"], dataset["url"]),)
         else:
             identifiers = zip(dataset["filenames"], dataset["urls"])
         for filename, url in identifiers:
+            if version is not None:
+                filename = filename.format(version)
             def progress(b=1, bsize=1, tsize=None):
                 if not hasattr(self, "pbar"):
                     self.pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=f"Downloading {filename} dataset")
@@ -131,12 +119,7 @@ class DatasetLoader():
 
             if not isfile(join(DATADIR, filename)):
                 try:
-                    if "size" in dataset:
-                        with urlopen(join(url, filename)) as f, open(join(DATADIR, filename), "wb") as g:
-                            progress()
-                            g.write(CallbackIOWrapper(self.pbar.update, f, "read").read(dataset["size"]))
-                    else:
-                        urlretrieve(join(url, filename), join(DATADIR, filename), progress)
+                    urlretrieve(join(url, filename), join(DATADIR, filename), progress)
                     del self.pbar
                 except URLError as e:
                     if e.status != 404:
@@ -155,74 +138,31 @@ class DatasetLoader():
                         parallel_target.append(tgt if index == 0 else src)
             return parallel_source, parallel_target
 
-        elif name in ["news-monolingual-align", "news-monolingual-train"]:
-            self.download(self.news_monolingual_data)
-            mono_source, mono_target, langdetect = list(), list(), LangDetect()
-            mpath, mfiles = DATADIR, self.news_monolingual_data["filenames"]
-            with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g, \
-                MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize, \
-                MosesSentenceSplitter(self.source_lang, False) as src_split, MosesSentenceSplitter(self.target_lang, False) as tgt_split:
-                collected_src_samples, collected_tgt_samples = 0, 0
-                for src in f:
-                    if len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
-                            and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
-                        mono_source.append(src.strip())
-                        collected_src_samples += 1
-                        if collected_src_samples >= self.news_monolingual_data["samples"][1 if name.endswith("train") else 0]:
-                            break
-                else:
-                    warn(f"Only obtained {len(mono_source)} source sentences.")
-                for tgt in g:
-                    if len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
-                            and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
-                        mono_target.append(tgt.strip())
-                        collected_tgt_samples += 1
-                        if collected_tgt_samples >= self.news_monolingual_data["samples"][1 if name.endswith("train") else 0]:
-                            break
-                else:
-                    warn(f"Only obtained {len(mono_target)} target sentences.")
-            return mono_source, mono_target
-
         elif name in ["monolingual-align", "monolingual-train"]:
-            self.download(self.monolingual_data)
-            mono_source, mono_target, lines, langdetect = set(), set(), list(), LangDetect()
-            mpath, mfiles = DATADIR, self.monolingual_data["filenames"]
-            with xopen(join(mpath, mfiles[0])) as f, xopen(join(mpath, mfiles[1])) as g, \
-                MosesTokenizer(self.source_lang) as src_tokenize, MosesTokenizer(self.target_lang) as tgt_tokenize, \
-                MosesSentenceSplitter(self.source_lang, False) as src_split, MosesSentenceSplitter(self.target_lang, False) as tgt_split:
-                try:
-                    for line in f:
-                        if len(line.strip()) == 0:
-                            for sentence in src_split(lines):
-                                if langdetect.detect(sentence) == self.source_lang and sentence not in mono_source\
-                                    and self.min_monolingual_sent_len <= len(src_tokenize(sentence)) <= self.max_monolingual_sent_len:
-                                    mono_source.add(sentence)
-                                    print(len(mono_source))
-                            if len(mono_source) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
-                                break
-                            lines.clear()
-                        else:
-                            lines.append(line.decode())
-                    else:
-                        warn(f"Only obtained {len(mono_source)} sentences")
-                except EOFError:
-                    warn(f"Only obtained {len(mono_source)} sentences")
-                try:
-                    for line in g:
-                        if len(line.strip()) == 0:
-                            for sentence in tgt_split(lines):
-                                if langdetect.detect(sentence) == self.target_lang and sentence not in mono_target\
-                                    and self.min_monolingual_sent_len <= len(tgt_tokenize(sentence)) <= self.max_monolingual_sent_len:
-                                    mono_target.add(sentence)
-                            if len(mono_target) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
-                                break
-                            lines.clear()
-                        else:
-                            lines.append(line.decode())
-                    else:
-                        warn(f"Only obtained {len(mono_target)} sentences")
-                except EOFError:
-                    warn(f"Only obtained {len(mono_target)} sentences")
+            mono_source, mono_target, langdetect = set(), set(), LangDetect()
+            for version in self.monolingual_data["versions"]:
+                self.download(self.monolingual_data, version)
+                mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
+                if isfile(join(mpath, mfiles[0])):
+                    with gopen(join(mpath, mfiles[0]), "rt") as f, MosesTokenizer(self.source_lang) as src_tokenize, \
+                    MosesSentenceSplitter(self.source_lang, False) as src_split:
+                        for src in f:
+                            if len(mono_source) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
+                            and len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
+                            and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
+                                mono_source.add(src.strip())
+                if isfile(join(mpath, mfiles[1])):
+                    with gopen(join(mpath, mfiles[1]), "rt") as g, MosesTokenizer(self.target_lang) as tgt_tokenize, \
+                    MosesSentenceSplitter(self.target_lang, False) as tgt_split:
+                        for tgt in g:
+                            if len(mono_target) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
+                            and len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
+                            and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
+                                mono_target.add(tgt.strip())
+                if min(len(mono_source), len(mono_target)) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
+                    break
+            else:
+                warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
             return list(mono_source), list(mono_target)
 
         elif name in ["scored", "scored-mlqe", "scored-wmt"]:
