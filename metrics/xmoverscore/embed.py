@@ -83,7 +83,7 @@ class BertRemapPretrained(BertEmbed):
     Obtains pretrained remapping matrices from original XMoverScore repository.
     """
 
-    url = "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/master/mapping/europarl-v7.{}-{}.2k.12.{}.map"
+    url = "https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/40e4d2b0d78411ec617c7e73c4fbe278a1a1f7e8/mapping/europarl-v7.{}-{}.2k.12.{}.map"
 
     def remap(self, source_lang, target_lang):
         if self.mapping == "CLP":
