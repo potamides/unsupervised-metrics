@@ -142,7 +142,7 @@ class DatasetLoader():
             mono_source, mono_target, langdetect = set(), set(), LangDetect()
             for version in self.monolingual_data["versions"]:
                 self.download(self.monolingual_data, version)
-                patterns = ['https?://', f"{version}, \d{1,2}:\d{2}"] # filter urls and date strings
+                patterns = ['https?://', str(version) + ", \d{1,2}:\d{2}"] # filter urls and date strings
                 mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
                 if isfile(join(mpath, mfiles[0])):
                     with gopen(join(mpath, mfiles[0]), "rt") as f, MosesTokenizer(self.source_lang) as src_tokenize, \
