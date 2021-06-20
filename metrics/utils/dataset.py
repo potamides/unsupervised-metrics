@@ -13,6 +13,7 @@ from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitt
 from truecase import get_true_case
 from tqdm import tqdm
 from logging import warn
+from re import search
 from fasttext import FastText, load_model
 
 DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
@@ -39,7 +40,7 @@ class LangDetect():
         return (label, score) if return_score else label
 
 class DatasetLoader():
-    def __init__(self, source_language, target_language, min_monolingual_sent_len=0, max_monolingual_sent_len=30):
+    def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=30):
         self.source_lang = source_language
         self.target_lang = target_language
         self.min_monolingual_sent_len = min_monolingual_sent_len
@@ -141,12 +142,14 @@ class DatasetLoader():
             mono_source, mono_target, langdetect = set(), set(), LangDetect()
             for version in self.monolingual_data["versions"]:
                 self.download(self.monolingual_data, version)
+                patterns = ['https?://', f"{version}, \d{1,2}:\d{2}"] # filter urls and date strings
                 mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
                 if isfile(join(mpath, mfiles[0])):
                     with gopen(join(mpath, mfiles[0]), "rt") as f, MosesTokenizer(self.source_lang) as src_tokenize, \
                     MosesSentenceSplitter(self.source_lang, False) as src_split:
                         for src in f:
                             if len(mono_source) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
+                            and all(not search(pat, src) for pat in patterns) \
                             and len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
                             and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
                                 mono_source.add(src.strip())
@@ -155,6 +158,7 @@ class DatasetLoader():
                     MosesSentenceSplitter(self.target_lang, False) as tgt_split:
                         for tgt in g:
                             if len(mono_target) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
+                            and all(not search(pat, tgt) for pat in patterns) \
                             and len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
                             and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
                                 mono_target.add(tgt.strip())
