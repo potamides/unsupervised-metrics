@@ -58,7 +58,7 @@ class DatasetLoader():
                 f"http://data.statmt.org/news-crawl/{self.target_lang}"
             ),
             "versions": list(range(2007, 2021)),
-            "samples": (40000, 10000000),
+            "samples": (40000, 4000000),
         }
     @property
     def parallel_data(self):

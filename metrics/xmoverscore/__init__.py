@@ -60,11 +60,11 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertRemap):
         remap_size = 2000,
         embed_batch_size = 128,
         translate_batch_size = 16,
-        ratio = 0.5
+        nmt_weights = [0.8, 0.2],
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
-                tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine, mine_batch_size)
+                tgt_lang, mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size)
         BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
 
 class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
@@ -81,6 +81,7 @@ class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
         align_batch_size = 5000,
         mine_batch_size = 5000000,
         lm_weights = [1, 0.1],
+        nmt_weights = [0.8, 0.2],
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
@@ -90,11 +91,10 @@ class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
         remap_size = 2000,
         embed_batch_size = 128,
         translate_batch_size = 16,
-        ratio = 0.5
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTLMAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
-                tgt_lang, mt_model_name, translate_batch_size, ratio, use_cosine, mine_batch_size, use_lm, lm_weights)
+                tgt_lang, mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size, use_lm, lm_weights)
         BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
 
 class XMoverScore(XMoverLMAlign, BertRemapPretrained):
