@@ -9,10 +9,8 @@ source_lang, target_lang = "de", "en"
 iterations = 5
 
 def distil_tests():
-    scorer = DistilScore(src_lang=source_lang, tgt_lang=target_lang, suffix="1")
+    scorer = DistilScore(source_language=source_lang, target_language=target_lang, suffix="1")
     dataset = DatasetLoader(source_lang, target_lang)
-    parallel_src, parallel_tgt = dataset.load("parallel")
-    mono_src, mono_tgt = dataset.load("monolingual-train")
     eval_src, eval_system, eval_scores = dataset.load("scored")
     results, index = defaultdict(list), list(range(iterations + 1))
 
@@ -24,6 +22,9 @@ def distil_tests():
     results["spearman"].append(round(100 * spearman, 2))
     results["rmse"].append(round(rmse, 2))
     results["mae"].append(round(mae, 2))
+
+    parallel_src, parallel_tgt = dataset.load("parallel")
+    mono_src, mono_tgt = dataset.load("monolingual-train")
 
     for iteration in range(1, iterations + 1):
         logging.info(f"Training iteration {iteration}.")

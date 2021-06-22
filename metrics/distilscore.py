@@ -4,6 +4,7 @@ from sentence_transformers.datasets import ParallelSentencesDataset
 from torch.utils.data import DataLoader
 from torch.cuda import is_available as cuda_is_available
 from torch.nn.functional import cosine_similarity
+from torch import from_numpy
 from .common import CommonScore
 from .utils.knn import ratio_margin_align
 from .utils.dataset import DATADIR
@@ -29,28 +30,28 @@ class DistilScore(CommonScore):
         train_max_sentence_length=250,      # Maximum length (characters) for parallel training sentences
         num_epochs=5,                       # Train for x epochs
         num_warmup_steps=10000,             # Warumup steps
-        num_evaluation_steps=1000,          # Evaluate performance after every xxxx steps
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
         train_size = 500000,
         k = 5,
         suffix = None
     ):
+        assert "en" in [source_language, target_language], "One language has to be English!"
         self.teacher_model_name = teacher_model_name
+        self.target_language = target_language
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
         self.max_sentences_per_trainfile = max_sentences_per_trainfile
         self.train_max_sentence_length = train_max_sentence_length
         self.num_epochs = num_epochs
         self.num_warmup_steps = num_warmup_steps
-        self.num_evaluation_steps = num_evaluation_steps
         self.device = device
         self.knn_batch_size = knn_batch_size
         self.mine_batch_size = mine_batch_size
         self.train_size = train_size
         self.k = k
         self.cache_dir = join(DATADIR, "distillation",
-                f"{source_language}-{target_language}-{teacher_model_name}-{student_model_name}")
+                f"{'-'.join(sorted([source_language, target_language]))}-{teacher_model_name}-{student_model_name}")
         self.suffix = suffix
 
         logging.info("Creating model from scratch")
@@ -61,7 +62,7 @@ class DistilScore(CommonScore):
 
     @property
     def path(self):
-        path = self.cache_folder + f"-{self.suffix}" if self.suffix is not None else ""
+        path = self.cache_dir + f"-{self.suffix}" if self.suffix is not None else ""
         Path(path).mkdir(parents=True, exist_ok=True)
         return path
 
@@ -78,7 +79,7 @@ class DistilScore(CommonScore):
 
     def score(self, source_sents, target_sents):
         source_embeddings, target_embeddings = self._embed(source_sents, target_sents)
-        return cosine_similarity(source_embeddings, target_embeddings)
+        return cosine_similarity(from_numpy(source_embeddings), from_numpy(target_embeddings))
 
     def mine(self, source_sents, target_sents, overwrite=True):
         logging.info("Mining pseudo parallel data.")
@@ -90,8 +91,8 @@ class DistilScore(CommonScore):
                 batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
                 source_embeddings, target_embeddings = self._embed(batch_src, batch_tgt)
                 logging.info("Mining pseudo parallel data with Ratio Margin function.")
-                batch_pairs, batch_scores = ratio_margin_align(source_embeddings, target_embeddings, self.k,
-                        self.knn_batch_size, self.device)
+                batch_pairs, batch_scores = ratio_margin_align(from_numpy(source_embeddings),
+                        from_numpy(target_embeddings), self.k, self.knn_batch_size, self.device)
                 del source_embeddings, target_embeddings
                 pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
                 batch += batch_size
@@ -110,9 +111,12 @@ class DistilScore(CommonScore):
         if not isfile(join(self.path, 'config.json')) or overwrite:
             logging.info("Loading teacher model and training data.")
             teacher_model = SentenceTransformer(self.teacher_model_name, device=self.device)
-
             train_data = ParallelSentencesDataset(student_model=self.model, teacher_model=teacher_model,
                     batch_size=self.inference_batch_size, use_embedding_cache=True)
+
+            if self.target_language == "en": # since teacher embeds source sentences make sure they are in english
+                source_sents, target_sents = target_sents, source_sents
+
             if unaligned:
                 train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
                         max_sentences=self.max_sentences_per_trainfile, max_sentence_length=self.train_max_sentence_length)
@@ -136,7 +140,6 @@ class DistilScore(CommonScore):
                 evaluator=None if dev_trans_acc is None else SequentialEvaluator([dev_trans_acc], main_score_function=np.mean),
                 epochs=self.num_epochs,
                 warmup_steps=self.num_warmup_steps,
-                evaluation_steps=self.num_evaluation_steps,
                 optimizer_params= {'lr': 2e-5, 'eps': 1e-6, 'correct_bias': False}
             )
             self.model.save(self.path)
