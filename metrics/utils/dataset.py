@@ -15,6 +15,7 @@ from tqdm import tqdm
 from logging import warn
 from re import search
 from fasttext import FastText, load_model
+from collections import defaultdict
 
 DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
@@ -33,10 +34,16 @@ class LangDetect():
             urlretrieve(join(self.url, name), target_path)
         return load_model(target_path)
 
-    def detect(self, text, return_score=False):
-        labels, scores = self.model.predict(text.strip())
-        label = labels[0].removeprefix("__label__")
-        score = min(float(scores[0]), 1.0)
+    def detect(self, texts, return_score=False):
+        texts = [texts] if isinstance(texts, str) else texts
+        counter = defaultdict(float)
+
+        for text in texts:
+            labels, scores = self.model.predict(text.strip())
+            label = labels[0].removeprefix("__label__")
+            score = min(float(scores[0]), 1.0)
+            counter[label] += score
+        label, score = sorted(counter.items(), key=lambda tup: tup[1])[-1]
         return (label, score) if return_score else label
 
 class DatasetLoader():

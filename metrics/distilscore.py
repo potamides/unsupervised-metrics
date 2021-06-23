@@ -7,8 +7,9 @@ from torch.nn.functional import cosine_similarity
 from torch import from_numpy
 from .common import CommonScore
 from .utils.knn import ratio_margin_align
-from .utils.dataset import DATADIR
-from os.path import join, isfile
+from .utils.dataset import DATADIR, LangDetect
+from .utils.nmt import language2mBART
+from os.path import join, isfile, basename
 from nltk.metrics.distance import edit_distance
 from pathlib import Path
 
@@ -28,7 +29,7 @@ class DistilScore(CommonScore):
         inference_batch_size=64,            # Batch size at inference
         max_sentences_per_trainfile=200000, # Maximum number of  parallel sentences for training
         train_max_sentence_length=250,      # Maximum length (characters) for parallel training sentences
-        num_epochs=5,                       # Train for x epochs
+        num_epochs=20,                      # Train for x epochs
         num_warmup_steps=10000,             # Warumup steps
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
@@ -51,7 +52,7 @@ class DistilScore(CommonScore):
         self.train_size = train_size
         self.k = k
         self.cache_dir = join(DATADIR, "distillation",
-                f"{'-'.join(sorted([source_language, target_language]))}-{teacher_model_name}-{student_model_name}")
+            f"{'-'.join(sorted([source_language, target_language]))}-{basename(teacher_model_name)}-{basename(student_model_name)}")
         self.suffix = suffix
 
         logging.info("Creating model from scratch")
@@ -59,6 +60,18 @@ class DistilScore(CommonScore):
         # Apply mean pooling to get one fixed sized sentence vector
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
         self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device)
+
+        # mBART also has a decoder but we are only interested in the encoder output. To make sure that
+        # sentence_transformers use the encoder output we monkey patch the forward method. Don't do this at home kids.
+        if "mbart" in student_model_name:
+            mbart, detector = word_embedding_model.auto_model, LangDetect()
+            mbart.forward = lambda **kv: type(mbart).forward(mbart, **kv)[-1:]
+            
+            def tokenize(text):
+                self.model.tokenizer.src_lang = language2mBART[detector.detect(text)]
+                return word_embedding_model.tokenize(text)
+
+            self.model.tokenize = tokenize
 
     @property
     def path(self):

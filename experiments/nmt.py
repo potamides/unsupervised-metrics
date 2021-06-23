@@ -39,7 +39,7 @@ def nmt_tests(metric="cosine"):
     if target_lang == "en":
         logging.info(f"Evaluating performance with language model.")
         aligner.use_lm = True
-        index.append(f"{iterations} + LM")
+        index.insert(-1, f"{iterations} + LM")
         pearson, spearman = aligner.correlation(eval_src, eval_system, eval_scores)
         rmse, mae = aligner.error(eval_src, eval_system, eval_scores)
         aligner.use_lm = False
