@@ -28,7 +28,6 @@ class DistilScore(CommonScore):
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
         max_sentences_per_trainfile=200000, # Maximum number of  parallel sentences for training
-        train_max_sentence_length=250,      # Maximum length (characters) for parallel training sentences
         num_epochs=20,                      # Train for x epochs
         num_warmup_steps=10000,             # Warumup steps
         knn_batch_size = 1000000,
@@ -43,7 +42,6 @@ class DistilScore(CommonScore):
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
         self.max_sentences_per_trainfile = max_sentences_per_trainfile
-        self.train_max_sentence_length = train_max_sentence_length
         self.num_epochs = num_epochs
         self.num_warmup_steps = num_warmup_steps
         self.device = device
@@ -132,10 +130,9 @@ class DistilScore(CommonScore):
 
             if unaligned:
                 train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
-                        max_sentences=self.max_sentences_per_trainfile, max_sentence_length=self.train_max_sentence_length)
+                        max_sentences=self.max_sentences_per_trainfile)
             else:
-                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.max_sentences_per_trainfile,
-                        max_sentence_length=self.train_max_sentence_length)
+                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.max_sentences_per_trainfile)
 
             train_dataloader = DataLoader(train_data, shuffle=True, batch_size=self.train_batch_size)
             train_loss = losses.MSELoss(model=self.model)

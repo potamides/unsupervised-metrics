@@ -8,9 +8,10 @@ import logging
 source_lang, target_lang = "de", "en"
 iterations = 1
 
-def nmt_tests(metric="cosine"):
-    aligner = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, use_cosine=True if metric == "cosine" else False)
-    dataset = DatasetLoader(source_lang, target_lang)
+def nmt_tests(metric="cosine", weights=[0.8, 0.2], max_len=30):
+    aligner = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, nmt_weights=weights,
+            use_cosine=metric == "cosine")
+    dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
     eval_src, eval_system, eval_scores = dataset.load("scored")
     suffix = f"{source_lang}-{target_lang}-awesome-{metric}-{aligner.mapping}-monolingual-align-{aligner.k}-{aligner.remap_size}-{len(mono_src)}"
@@ -77,4 +78,4 @@ def nmt_tests(metric="cosine"):
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(*nmt_tests(metric="cosine"), sep="\n")
-print(*nmt_tests(metric="wmd"), sep="\n")
+print(*nmt_tests(metric="wmd", weights=[0.5, 0.5], max_len=50), sep="\n")
