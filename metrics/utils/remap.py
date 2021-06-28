@@ -3,11 +3,9 @@ import torch
 from itertools import chain
 from subprocess import check_output, DEVNULL
 from tempfile import NamedTemporaryFile as TempFile
-from pathlib import Path
 from simalign import SentenceAligner
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
-
-datadir = str((Path(__file__).parent.parent / "data").resolve())
+from .dataset import DATADIR
 
 def convert_sent_to_input(sents, tokenizer, max_seq_length):
     input_ids = []
@@ -129,7 +127,7 @@ def fast_align(sent_pairs, tokenizer, size, max_seq_length=100):
         if len(tokenized_pairs) >= size:
             break
 
-    with TempFile(dir=datadir, buffering=0) as fwd_file, TempFile(dir=datadir, buffering=0) as bwd_file:
+    with TempFile(dir=DATADIR, buffering=0) as fwd_file, TempFile(dir=DATADIR, buffering=0) as bwd_file:
         for file_, data, flags in ((fwd_file, tokenized_pairs, "-dov"), (bwd_file, tokenized_pairs, "-dovr")):
             file_.write("\n".join([f'{" ".join(src)} ||| {" ".join(tgt)}'.lower() for src, tgt in data]).encode())
             asym_aligned = check_output(["fast_align", "-i", file_.name, flags], stderr=DEVNULL)
