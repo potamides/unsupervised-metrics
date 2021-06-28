@@ -19,7 +19,7 @@ import numpy as np
 class DistilScore(CommonScore):
     def __init__(
         self,
-        teacher_model_name="bert-base-nli-stsb-mean-tokens",
+        teacher_model_name="xlm-roberta-base",
         student_model_name="xlm-roberta-base",
         source_language="en",
         target_language="de",
@@ -28,8 +28,8 @@ class DistilScore(CommonScore):
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
         max_sentences_per_trainfile=200000, # Maximum number of  parallel sentences for training
-        num_epochs=20,                      # Train for x epochs
-        num_warmup_steps=10000,             # Warumup steps
+        num_epochs=5,                       # Train for x epochs
+        num_warmup_steps=5000,              # Warumup steps
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
         train_size = 500000,
@@ -38,7 +38,9 @@ class DistilScore(CommonScore):
     ):
         assert "en" in [source_language, target_language], "One language has to be English!"
         self.teacher_model_name = teacher_model_name
+        self.student_model_name = student_model_name
         self.target_language = target_language
+        self.max_seq_length = max_seq_length
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
         self.max_sentences_per_trainfile = max_sentences_per_trainfile
@@ -52,24 +54,28 @@ class DistilScore(CommonScore):
         self.cache_dir = join(DATADIR, "distillation",
             f"{'-'.join(sorted([source_language, target_language]))}-{basename(teacher_model_name)}-{basename(student_model_name)}")
         self.suffix = suffix
+        self.model = self.load_student(student_model_name)
 
+    def load_student(self, model_name):
         logging.info("Creating model from scratch")
-        word_embedding_model = models.Transformer(student_model_name, max_seq_length=max_seq_length)
+        word_embedding_model = models.Transformer(model_name, max_seq_length=self.max_seq_length)
         # Apply mean pooling to get one fixed sized sentence vector
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-        self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device)
+        model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=self.device)
 
         # mBART also has a decoder but we are only interested in the encoder output. To make sure that
         # sentence_transformers use the encoder output we monkey patch the forward method. Don't do this at home kids.
-        if "mbart" in student_model_name:
+        if "mbart" in model_name:
             mbart, detector = word_embedding_model.auto_model, LangDetect()
             mbart.forward = lambda **kv: type(mbart).forward(mbart, **kv)[-1:]
             
             def tokenize(text):
-                self.model.tokenizer.src_lang = language2mBART[detector.detect(text)]
+                model.tokenizer.src_lang = language2mBART[detector.detect(text)]
                 return word_embedding_model.tokenize(text)
 
             self.model.tokenize = tokenize
+
+        return model
 
     @property
     def path(self):
@@ -120,9 +126,11 @@ class DistilScore(CommonScore):
 
     def train(self, source_sents, target_sents, dev_source_sents=None, dev_target_sents=None, unaligned=True, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
+            # Train a new model to avoid overfitting
+            new_model = self.load_student(self.student_model_name)
             logging.info("Loading teacher model and training data.")
             teacher_model = SentenceTransformer(self.teacher_model_name, device=self.device)
-            train_data = ParallelSentencesDataset(student_model=self.model, teacher_model=teacher_model,
+            train_data = ParallelSentencesDataset(student_model=new_model, teacher_model=teacher_model,
                     batch_size=self.inference_batch_size, use_embedding_cache=True)
 
             if self.target_language == "en": # since teacher embeds source sentences make sure they are in english
@@ -135,7 +143,7 @@ class DistilScore(CommonScore):
                 train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.max_sentences_per_trainfile)
 
             train_dataloader = DataLoader(train_data, shuffle=True, batch_size=self.train_batch_size)
-            train_loss = losses.MSELoss(model=self.model)
+            train_loss = losses.MSELoss(model=new_model)
 
             dev_trans_acc = None
             if dev_source_sents is not None and dev_target_sents is not None:
@@ -146,12 +154,12 @@ class DistilScore(CommonScore):
 
             # Train the model
             logging.info("Fine-tuning student model.")
-            self.model.fit(train_objectives=[(train_dataloader, train_loss)],
+            new_model.fit(train_objectives=[(train_dataloader, train_loss)],
                 evaluator=None if dev_trans_acc is None else SequentialEvaluator([dev_trans_acc], main_score_function=np.mean),
                 epochs=self.num_epochs,
                 warmup_steps=self.num_warmup_steps,
-                optimizer_params= {'lr': 2e-5, 'eps': 1e-6, 'correct_bias': False}
+                optimizer_params= {'lr': 6e-9, 'eps': 1e-6, 'correct_bias': False}
             )
-            self.model.save(self.path)
-        else:
-            self.model = SentenceTransformer(self.path, device=self.device)
+            new_model.save(self.path)
+
+        self.model = SentenceTransformer(self.path, device=self.device)
