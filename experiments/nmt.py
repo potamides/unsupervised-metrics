@@ -81,5 +81,5 @@ logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime
 
 for weight in linspace(1, 0, 11):
     logging.info(f"Using weight {weight} for cross-lingual XMoverScore and weight {1 - weight} for NMT system.")
-    print(*nmt_tests(metric="cosine"), weights=[weight, 1 - weight], sep="\n")
+    print(*nmt_tests(metric="cosine", weights=[weight, 1 - weight]), sep="\n")
     print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], max_len=50), sep="\n")
