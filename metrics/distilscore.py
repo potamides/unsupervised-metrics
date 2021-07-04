@@ -27,12 +27,11 @@ class DistilScore(CommonScore):
         max_seq_length=128,                 # Student model max. lengths for inputs (number of word pieces)
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
-        max_sentences_per_trainfile=200000, # Maximum number of  parallel sentences for training
         num_epochs=5,                       # Train for x epochs
-        num_warmup_steps=5000,              # Warumup steps
+        num_warmup_steps=10000,             # Warumup steps
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
-        train_size = 500000,
+        train_size = 200000,
         k = 5,
         suffix = None
     ):
@@ -43,7 +42,6 @@ class DistilScore(CommonScore):
         self.max_seq_length = max_seq_length
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
-        self.max_sentences_per_trainfile = max_sentences_per_trainfile
         self.num_epochs = num_epochs
         self.num_warmup_steps = num_warmup_steps
         self.device = device
@@ -138,9 +136,9 @@ class DistilScore(CommonScore):
 
             if unaligned:
                 train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
-                        max_sentences=self.max_sentences_per_trainfile)
+                        max_sentences=self.train_size)
             else:
-                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.max_sentences_per_trainfile)
+                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.train_size)
 
             train_dataloader = DataLoader(train_data, shuffle=True, batch_size=self.train_batch_size)
             train_loss = losses.MSELoss(model=new_model)

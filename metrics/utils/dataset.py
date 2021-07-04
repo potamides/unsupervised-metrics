@@ -138,11 +138,14 @@ class DatasetLoader():
             parallel_source, parallel_target = list(), list()
             index = 0 if isfile(join(DATADIR, self.parallel_data["filenames"][0])) else 1
             with gopen(join(DATADIR, self.parallel_data["filenames"][index]), 'rt') as tsvfile:
+                start = self.parallel_data["samples"][0] if name.endswith("align") else 0
                 samples = self.parallel_data["samples"][1 if name.endswith("align") else 0]
-                for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), samples):
+                for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), start, None):
                     if src.strip() and tgt.strip():
                         parallel_source.append(src if index == 0 else tgt)
                         parallel_target.append(tgt if index == 0 else src)
+                    if len(parallel_source) >= samples:
+                        break
             return parallel_source, parallel_target
 
         elif name in ["monolingual-align", "monolingual-train"]:
