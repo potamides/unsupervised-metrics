@@ -19,12 +19,11 @@ import numpy as np
 class DistilScore(CommonScore):
     def __init__(
         self,
-        teacher_model_name="xlm-roberta-base",
+        teacher_model_name="bert-base-nli-stsb-mean-tokens",
         student_model_name="xlm-roberta-base",
         source_language="en",
         target_language="de",
         device="cuda" if cuda_is_available() else "cpu",
-        max_seq_length=128,                 # Student model max. lengths for inputs (number of word pieces)
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
         num_epochs=5,                       # Train for x epochs
@@ -39,7 +38,6 @@ class DistilScore(CommonScore):
         self.teacher_model_name = teacher_model_name
         self.student_model_name = student_model_name
         self.target_language = target_language
-        self.max_seq_length = max_seq_length
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
         self.num_epochs = num_epochs
@@ -56,7 +54,7 @@ class DistilScore(CommonScore):
 
     def load_student(self, model_name):
         logging.info("Creating model from scratch")
-        word_embedding_model = models.Transformer(model_name, max_seq_length=self.max_seq_length)
+        word_embedding_model = models.Transformer(model_name)
         # Apply mean pooling to get one fixed sized sentence vector
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
         model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=self.device)
@@ -136,9 +134,10 @@ class DistilScore(CommonScore):
 
             if unaligned:
                 train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
-                        max_sentences=self.train_size)
+                        max_sentences=self.train_size, max_sentence_length=None)
             else:
-                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.train_size)
+                train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.train_size,
+                        max_sentence_length=None)
 
             train_dataloader = DataLoader(train_data, shuffle=True, batch_size=self.train_batch_size)
             train_loss = losses.MSELoss(model=new_model)
