@@ -12,6 +12,7 @@ from .utils.nmt import language2mBART
 from os.path import join, isfile, basename
 from nltk.metrics.distance import edit_distance
 from pathlib import Path
+from math import ceil
 
 import logging
 import numpy as np
@@ -26,8 +27,7 @@ class DistilScore(CommonScore):
         device="cuda" if cuda_is_available() else "cpu",
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
-        num_epochs=5,                       # Train for x epochs
-        num_warmup_steps=10000,             # Warumup steps
+        num_epochs=10,                      # Train for x epochs
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
         train_size = 200000,
@@ -41,7 +41,6 @@ class DistilScore(CommonScore):
         self.train_batch_size = train_batch_size
         self.inference_batch_size = inference_batch_size
         self.num_epochs = num_epochs
-        self.num_warmup_steps = num_warmup_steps
         self.device = device
         self.knn_batch_size = knn_batch_size
         self.mine_batch_size = mine_batch_size
@@ -151,11 +150,12 @@ class DistilScore(CommonScore):
 
             # Train the model
             logging.info("Fine-tuning student model.")
+            warmup_steps = ceil(len(train_dataloader) * self.num_epochs * 0.1)  # 10% of train data for warm-up
             new_model.fit(train_objectives=[(train_dataloader, train_loss)],
                 evaluator=None if dev_trans_acc is None else SequentialEvaluator([dev_trans_acc], main_score_function=np.mean),
                 epochs=self.num_epochs,
-                warmup_steps=self.num_warmup_steps,
-                optimizer_params= {'lr': 6e-9, 'eps': 1e-6, 'correct_bias': False}
+                warmup_steps=warmup_steps,
+                optimizer_params= {'lr': 2e-5, 'eps': 1e-6, 'correct_bias': False}
             )
             new_model.save(self.path)
 

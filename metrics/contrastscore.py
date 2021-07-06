@@ -1,8 +1,8 @@
-from sentence_transformers import SentenceTransformer, InputExample
-from sentence_transformers import models, losses
+from sentence_transformers import SentenceTransformer, InputExample, models, util
 from torch.utils.data import DataLoader
 from os.path import join, isfile, basename
 from torch.cuda import is_available as cuda_is_available
+from torch.nn import CrossEntropyLoss, Module
 from torch.nn.functional import cosine_similarity
 from torch import from_numpy
 from math import ceil
@@ -12,17 +12,51 @@ from .utils.dataset import DATADIR
 from nltk.metrics.distance import edit_distance
 from pathlib import Path
 import logging
+import torch
 
-class CSEScore(CommonScore):
+class AdditiveMarginSoftmaxLoss(Module):
+    """
+    Contrastive learning loss function used by LaBSE and SimCSE.
+    """
+    def __init__(self, model: SentenceTransformer, scale = 20.0, margin = 0.0, symmetric = True, similarity_fct = util.cos_sim):
+        super().__init__()
+        self.model = model
+        self.scale = scale
+        self.margin = margin
+        self.symmetric = symmetric
+        self.similarity_fct = similarity_fct
+        self.cross_entropy_loss = CrossEntropyLoss()
+
+    def additive_margin_softmax_loss(self, embeddings_a, embeddings_b):
+        scores = self.similarity_fct(embeddings_a, embeddings_b)
+        scores.diagonal().subtract_(self.margin)
+        labels = torch.tensor(range(len(scores)), dtype=torch.long, device=scores.device)  # Example a[i] should match with b[i]
+        return self.cross_entropy_loss(self.scale * scores, labels)
+
+    def forward(self, sentence_features, _):
+        reps = [self.model(sentence_feature)['sentence_embedding'] for sentence_feature in sentence_features]
+        assert len(reps) == 2, "Inputs should be source texts and translations"
+        embeddings_a = reps[0]
+        embeddings_b = reps[1]
+
+        if self.symmetric:
+            return self.additive_margin_softmax_loss(embeddings_a, embeddings_b) + self.additive_margin_softmax_loss(embeddings_b, embeddings_a)
+        else:
+            return self.additive_margin_softmax_loss(embeddings_a, embeddings_b)
+
+    def get_config_dict(self):
+        return {'scale': self.scale, 'margin': self.margin, 'symmetric': self.symmetric, 'similarity_fct': self.similarity_fct.__name__}
+
+class ContrastScore(CommonScore):
     def __init__(
         self,
         model_name="xlm-roberta-base",
         source_language="en",
         target_language="de",
         device="cuda" if cuda_is_available() else "cpu",
-        train_batch_size=128,
-        max_seq_length=32,
-        num_epochs=1,
+        train_batch_size=256,
+        max_seq_length=None,
+        num_epochs=10,
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
         train_size = 100000,
@@ -38,7 +72,7 @@ class CSEScore(CommonScore):
         self.mine_batch_size = mine_batch_size
         self.train_size = train_size
         self.k = k
-        self.cache_dir = join(DATADIR, "SimCSE",
+        self.cache_dir = join(DATADIR, "contrastive-learning",
             f"{'-'.join(sorted([source_language, target_language]))}-{basename(model_name)}")
         self.suffix = suffix
         self.model = self.load_model(model_name)
@@ -99,32 +133,23 @@ class CSEScore(CommonScore):
         with open(file_path, "rb") as f:
             sents = list()
             for line in f:
-                sents.append(line.strip().split("\t"))
+                sents.append(line.decode().strip().split("\t"))
             return sents
 
-    def train(self, source_sents, target_sents, mine_size=0, top_percent=0.02, overwrite=True):
+    def train(self, source_sents, target_sents, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
             # Train a new model
             new_model = self.load_model(self.model_name)
 
             # Convert train sentences to sentence pairs
-            mono_size = (self.train_size - mine_size) / 2
-            mine_mono_size = mine_size / top_percent
-            source_train_data = [InputExample(texts=[s, s]) for s in source_sents[:mono_size]]
-            target_train_data = [InputExample(texts=[s, s]) for s in target_sents[:mono_size]]
-            mined_train_data = [] if mine_size == 0 else [InputExample(texts=[s, t]) for s, t in self.mine(
-                    source_sents[mono_size:mine_mono_size+mono_size],
-                    target_sents[mono_size:mine_mono_size+mono_size],
-                    mine_size,
-                    overwrite=overwrite)
-                ]
-            train_data = source_train_data + target_train_data + mined_train_data
+            train_data = [InputExample(texts=[s, t]) for s, t in self.mine(source_sents, target_sents, self.train_size,
+                    overwrite=overwrite)]
 
             # DataLoader to batch your data
             train_dataloader = DataLoader(train_data, batch_size=self.train_batch_size, shuffle=True)
 
             # Use the denoising auto-encoder loss
-            train_loss = losses.MultipleNegativesRankingLoss(new_model)
+            train_loss = AdditiveMarginSoftmaxLoss(new_model)
 
             # Call the fit method
             warmup_steps = ceil(len(train_dataloader) * self.num_epochs * 0.1)  # 10% of train data for warm-up
@@ -133,5 +158,6 @@ class CSEScore(CommonScore):
                 warmup_steps=warmup_steps,
                 optimizer_params={'lr': 5e-5}
             )
+            new_model.save(self.path)
 
         self.model = SentenceTransformer(self.path, device=self.device)
