@@ -4,7 +4,6 @@ from os.path import join, isfile, basename
 from torch.cuda import is_available as cuda_is_available
 from torch.nn import CrossEntropyLoss, Module
 from torch.nn.functional import cosine_similarity
-from torch import from_numpy
 from math import ceil
 from .utils.knn import ratio_margin_align
 from .common import CommonScore
@@ -80,7 +79,7 @@ class ContrastScore(CommonScore):
     def load_model(self, model_name):
         word_embedding_model = models.Transformer(model_name, max_seq_length=self.max_seq_length)
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-        return SentenceTransformer(modules=[word_embedding_model, pooling_model])
+        return SentenceTransformer(modules=[word_embedding_model, pooling_model], device=self.device)
 
     @property
     def path(self):
@@ -89,7 +88,9 @@ class ContrastScore(CommonScore):
         return path
 
     def _embed(self, source_sents, target_sents):
-        return self.model.encode(source_sents), self.model.encode(target_sents)
+        return (
+            self.model.encode(source_sents, convert_to_tensor=True).cpu(),
+            self.model.encode(target_sents, convert_to_tensor=True).cpu())
 
     def align(self, source_sents, target_sents):
         source_embeddings, target_embeddings = self._embed(source_sents, target_sents)
@@ -101,7 +102,7 @@ class ContrastScore(CommonScore):
 
     def score(self, source_sents, target_sents):
         source_embeddings, target_embeddings = self._embed(source_sents, target_sents)
-        return cosine_similarity(from_numpy(source_embeddings), from_numpy(target_embeddings))
+        return cosine_similarity(source_embeddings, target_embeddings)
 
     def mine(self, source_sents, target_sents, mine_size, overwrite=True):
         logging.info("Mining pseudo parallel data.")
@@ -113,8 +114,8 @@ class ContrastScore(CommonScore):
                 batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
                 source_embeddings, target_embeddings = self._embed(batch_src, batch_tgt)
                 logging.info("Mining pseudo parallel data with Ratio Margin function.")
-                batch_pairs, batch_scores = ratio_margin_align(from_numpy(source_embeddings),
-                        from_numpy(target_embeddings), self.k, self.knn_batch_size, self.device)
+                batch_pairs, batch_scores = ratio_margin_align(source_embeddings, target_embeddings, self.k,
+                        self.knn_batch_size, self.device)
                 del source_embeddings, target_embeddings
                 pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
                 batch += batch_size
@@ -138,9 +139,6 @@ class ContrastScore(CommonScore):
 
     def train(self, source_sents, target_sents, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
-            # Train a new model
-            new_model = self.load_model(self.model_name)
-
             # Convert train sentences to sentence pairs
             train_data = [InputExample(texts=[s, t]) for s, t in self.mine(source_sents, target_sents, self.train_size,
                     overwrite=overwrite)]
@@ -148,7 +146,11 @@ class ContrastScore(CommonScore):
             # DataLoader to batch your data
             train_dataloader = DataLoader(train_data, batch_size=self.train_batch_size, shuffle=True)
 
-            # Use the denoising auto-encoder loss
+            # Train a new model
+            del self.model
+            new_model = self.load_model(self.model_name)
+
+            # Use contrastive learning loss
             train_loss = AdditiveMarginSoftmaxLoss(new_model)
 
             # Call the fit method
