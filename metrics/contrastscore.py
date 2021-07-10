@@ -1,8 +1,8 @@
 from sentence_transformers import SentenceTransformer, InputExample, models, util
 from torch.utils.data import DataLoader
 from os.path import join, isfile, basename
-from torch.cuda import is_available as cuda_is_available
-from torch.nn import CrossEntropyLoss, Module
+from torch.cuda import device_count, is_available as cuda_is_available
+from torch.nn import CrossEntropyLoss, Module, DataParallel
 from torch.nn.functional import cosine_similarity
 from math import ceil
 from .utils.knn import ratio_margin_align
@@ -17,7 +17,7 @@ class AdditiveMarginSoftmaxLoss(Module):
     """
     Contrastive learning loss function used by LaBSE and SimCSE.
     """
-    def __init__(self, model: SentenceTransformer, scale = 20.0, margin = 0.0, symmetric = True, similarity_fct = util.cos_sim):
+    def __init__(self, model, scale = 20.0, margin = 0.0, symmetric = True, similarity_fct = util.cos_sim):
         super().__init__()
         self.model = model
         self.scale = scale
@@ -53,6 +53,7 @@ class ContrastScore(CommonScore):
         source_language="en",
         target_language="de",
         device="cuda" if cuda_is_available() else "cpu",
+        parallelize= False,
         train_batch_size=256,
         max_seq_length=None,
         num_epochs=10,
@@ -67,6 +68,7 @@ class ContrastScore(CommonScore):
         self.max_seq_length = max_seq_length
         self.num_epochs = num_epochs
         self.device = device
+        self.parallelize = parallelize
         self.knn_batch_size = knn_batch_size
         self.mine_batch_size = mine_batch_size
         self.train_size = train_size
@@ -151,7 +153,11 @@ class ContrastScore(CommonScore):
             new_model = self.load_model(self.model_name)
 
             # Use contrastive learning loss
-            train_loss = AdditiveMarginSoftmaxLoss(new_model)
+            if self.parallelize and device_count() > 1:
+               logging.info(f"Training on {device_count()} GPUs.")
+               train_loss = AdditiveMarginSoftmaxLoss(DataParallel(new_model))
+            else:
+               train_loss = AdditiveMarginSoftmaxLoss(new_model)
 
             # Call the fit method
             warmup_steps = ceil(len(train_dataloader) * self.num_epochs * 0.1)  # 10% of train data for warm-up

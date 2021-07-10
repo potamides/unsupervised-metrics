@@ -9,7 +9,7 @@ source_lang, target_lang = "de", "en"
 iterations = 5
 
 def contrastive_tests(max_len=30):
-    scorer = ContrastScore(source_language=source_lang, target_language=target_lang)
+    scorer = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     eval_src, eval_system, eval_scores = dataset.load("scored")
     parallel_src, parallel_tgt = dataset.load("parallel")
