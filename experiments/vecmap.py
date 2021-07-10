@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from metrics.xmoverscore import XMoverVecMapAlignScore
+from metrics.vecmapscore import VecMapScore
 from collections import defaultdict
 from tabulate import tabulate
 from metrics.utils.dataset import DatasetLoader
@@ -7,8 +8,8 @@ import logging
 
 source_lang, target_lang = "de", "en"
 
-def vecmap_tests():
-    aligner = XMoverVecMapAlignScore(src_lang=source_lang, tgt_lang=target_lang)
+def vecmap_tests(model=XMoverVecMapAlignScore):
+    aligner = model(src_lang=source_lang, tgt_lang=target_lang)
     dataset = DatasetLoader(source_lang, target_lang)
     parallel_src, parallel_tgt = dataset.load("parallel")
     eval_src, eval_system, eval_scores = dataset.load("scored")
@@ -28,3 +29,4 @@ def vecmap_tests():
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 print(*vecmap_tests(), sep="\n")
+print(*vecmap_tests(model=VecMapScore), sep="\n")
