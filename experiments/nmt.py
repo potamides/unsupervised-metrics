@@ -11,7 +11,7 @@ remap_iterations = 1
 
 def nmt_tests(metric="cosine", weights=[0.8, 0.2], max_len=30, nmt_iterations=0):
     aligner = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, nmt_weights=weights,
-            use_cosine=metric == "cosine")
+            use_cosine=metric == "cosine", monolingual_model_name="bert-base-cased" if target_lang == "en" else None)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
     eval_src, eval_system, eval_scores = dataset.load("scored")
@@ -69,5 +69,5 @@ for weight in linspace(1, 0, 11):
     print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], max_len=50), sep="\n")
 for weight in linspace(1, 0, 11):
     print(f"Using weight {weight} for cross-lingual XMoverScore and weight {1 - weight} for NMT system.")
-    print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], iterations=3), sep="\n")
-    print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], iterations=3, max_len=50), sep="\n")
+    print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], nmt_iterations=3), sep="\n")
+    print(*nmt_tests(metric="wmd", weights=[weight, 1 - weight], nmt_iterations=3, max_len=50), sep="\n")

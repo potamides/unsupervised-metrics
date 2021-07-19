@@ -2,43 +2,68 @@ from transformers import BertModel, BertTokenizer, BertConfig
 from ..utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from ..utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
 from ..utils.dataset import DATADIR
+from ..common import CommonScore
 from os.path import isfile, join
 from nltk.metrics.distance import edit_distance
-from ..common import CommonScore
 from numpy import loadtxt
+from functools import cached_property
 from urllib.request import urlopen
 import logging
 import torch
 
 class BertEmbed(CommonScore):
-    def __init__(self, model_name, mapping, device, do_lower_case, embed_batch_size):
-        config = BertConfig.from_pretrained(model_name, output_hidden_states=True)
-        self.tokenizer = BertTokenizer.from_pretrained(model_name, do_lower_case=do_lower_case)
-        self.model = BertModel.from_pretrained(model_name, config=config)
-        self.model.to(device)
+    def __init__(self, model_name, monolingual_model_name, mapping, device, do_lower_case, embed_batch_size):
+        self.model_name = model_name
+        self.monolingual_model_name = monolingual_model_name if monolingual_model_name else model_name
+        self.do_lower_case = do_lower_case
         self.device = device
         self.mapping = mapping
         self.embed_batch_size = embed_batch_size
         self.projection = None
 
+    @cached_property
+    def model(self):
+        config = BertConfig.from_pretrained(self.model_name, output_hidden_states=True)
+        return BertModel.from_pretrained(self.model_name, config=config).to(self.device)
+
+    @cached_property
+    def monolingual_model(self):
+        if self.monolingual_model_name != self.model_name:
+            config = BertConfig.from_pretrained(self.monolingual_model_name, output_hidden_states=True)
+            return BertModel.from_pretrained(self.monolingual_model_name, config=config).to(self.device)
+        else:
+            return self.model
+
+    @cached_property
+    def tokenizer(self):
+        return BertTokenizer.from_pretrained(self.model_name, do_lower_case=self.do_lower_case)
+
+    @cached_property
+    def monolingual_tokenzier(self):
+        if self.monolingual_model_name != self.model_name:
+            return BertTokenizer.from_pretrained(self.model_name, do_lower_case=self.do_lower_case)
+        else:
+            return self.tokenizer
+
     def _embed(self, source_sents, target_sents, same_language=False):
-        src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, self.model,
-                self.tokenizer, self.device)
-        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = bert_embed(target_sents, self.embed_batch_size, self.model,
-                self.tokenizer, self.device)
-        
+        model, tokenizer = (self.monolingual_model, self.monolingual_tokenzier) if same_language else (self.model, self.tokenizer)
+        src_embeddings, src_idf, src_tokens, src_mask = bert_embed(source_sents, self.embed_batch_size, model,
+                tokenizer, self.device)
+        tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask = bert_embed(target_sents, self.embed_batch_size, model,
+                tokenizer, self.device)
+
         if self.projection is not None and not same_language:
             if self.mapping == 'CLP':
                 src_embeddings = torch.matmul(src_embeddings, self.projection)
             else:
                 src_embeddings = src_embeddings - (src_embeddings * self.projection).sum(2, keepdim=True) * \
-                        self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)        
+                        self.projection.repeat(src_embeddings.shape[0], src_embeddings.shape[1], 1)
 
         return src_embeddings, src_idf, src_tokens, src_mask, tgt_embeddings, tgt_idf, tgt_tokens, tgt_mask
 
 class BertRemap(BertEmbed):
-    def __init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment):
-        super().__init__(model_name, mapping, device, do_lower_case, embed_batch_size)
+    def __init__(self, model_name, monolingual_model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment):
+        super().__init__(model_name, monolingual_model_name, mapping, device, do_lower_case, embed_batch_size)
         self.remap_size = remap_size
         self.alignment = alignment
 

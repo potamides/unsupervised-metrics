@@ -20,7 +20,7 @@ class XMoverBertAlignScore(XMoverAlign, BertRemap):
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
-        BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
+        BertRemap.__init__(self, model_name, None, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
 
 class XMoverVecMapAlignScore(XMoverAlign, VecMapEmbed):
     def __init__(
@@ -54,6 +54,7 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertRemap):
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
+        monolingual_model_name=None,
         mt_model_name="facebook/mbart-large-cc25",
         mapping="UMD",
         do_lower_case=False,
@@ -65,7 +66,8 @@ class XMoverNMTBertAlignScore(XMoverNMTAlign, BertRemap):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
                 tgt_lang, mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size)
-        BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
+        BertRemap.__init__(self, model_name, monolingual_model_name, mapping, device, do_lower_case, remap_size,
+                embed_batch_size, alignment)
 
 class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
     def __init__(
@@ -85,6 +87,7 @@ class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
         src_lang = "de",
         tgt_lang = "en",
         model_name="bert-base-multilingual-cased",
+        monolingual_model_name=None,
         mt_model_name="facebook/mbart-large-cc25",
         mapping="UMD",
         do_lower_case=False,
@@ -95,7 +98,8 @@ class XMoverNMTLMBertAlignScore(XMoverNMTLMAlign, BertRemap):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverNMTLMAlign.__init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang,
                 tgt_lang, mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size, use_lm, lm_weights)
-        BertRemap.__init__(self, model_name, mapping, device, do_lower_case, remap_size, embed_batch_size, alignment)
+        BertRemap.__init__(self, model_name, monolingual_model_name, mapping, device, do_lower_case, remap_size,
+                embed_batch_size, alignment)
 
 class XMoverScore(XMoverLMAlign, BertRemapPretrained):
     """
@@ -121,4 +125,4 @@ class XMoverScore(XMoverLMAlign, BertRemapPretrained):
     ):
         logging.info("Using device \"%s\" for computations.", device)
         XMoverLMAlign.__init__(self, device, k, n_gram, knn_batch_size, use_cosine, align_batch_size, use_lm, lm_weights)
-        BertRemapPretrained.__init__(self, model_name, mapping, device, do_lower_case, embed_batch_size)
+        BertRemapPretrained.__init__(self, model_name, None, mapping, device, do_lower_case, embed_batch_size)
