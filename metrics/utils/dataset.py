@@ -17,12 +17,12 @@ from re import search
 from fasttext import FastText, load_model
 from collections import defaultdict
 
-DATADIR = getenv("XMOVER_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
+DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
 
 class LangDetect():
     url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/"
-    
+
     def __init__(self, compress=False):
         # fixes https://github.com/facebookresearch/fastText/issues/1067 for the time being
         FastText.eprint = lambda _: None

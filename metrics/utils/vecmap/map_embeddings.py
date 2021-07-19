@@ -15,6 +15,8 @@
 
 from  . import embeddings
 from .cupy_utils import *
+from torch import zeros, from_numpy
+from collections import defaultdict
 
 import argparse
 import collections
@@ -56,8 +58,6 @@ def vecmap(cmd_args=None):
     parser = argparse.ArgumentParser(description='Map word embeddings in two languages into a shared space')
     parser.add_argument('src_input', help='the input source embeddings')
     parser.add_argument('trg_input', help='the input target embeddings')
-    parser.add_argument('src_output', help='the output source embeddings')
-    parser.add_argument('trg_output', help='the output target embeddings')
     parser.add_argument('--encoding', default='utf-8', help='the character encoding for input/output (defaults to utf-8)')
     parser.add_argument('--precision', choices=['fp16', 'fp32', 'fp64'], default='fp32', help='the floating-point precision (defaults to fp32)')
     parser.add_argument('--cuda', action='store_true', help='use cuda (requires cupy)')
@@ -126,7 +126,7 @@ def vecmap(cmd_args=None):
         parser.set_defaults(init_dictionary=args.acl2017_seed, orthogonal=True, normalize=['unit', 'center'], self_learning=True, direction='forward', stochastic_initial=1.0, stochastic_interval=1, batch_size=1000)
     if args.emnlp2016:
         parser.set_defaults(init_dictionary=args.emnlp2016, orthogonal=True, normalize=['unit', 'center'], batch_size=1000)
-    args = parser.parse_args()
+    args = parser.parse_args(cmd_args)
 
     # Check command line arguments
     if (args.src_dewhiten is not None or args.trg_dewhiten is not None) and not args.whiten:
@@ -409,14 +409,7 @@ def vecmap(cmd_args=None):
         t = time.time()
         it += 1
 
-    # Write mapped embeddings
-    srcfile = open(args.src_output, mode='w', encoding=args.encoding, errors='surrogateescape')
-    trgfile = open(args.trg_output, mode='w', encoding=args.encoding, errors='surrogateescape')
-    embeddings.write(src_words, xw, srcfile)
-    embeddings.write(trg_words, zw, trgfile)
-    srcfile.close()
-    trgfile.close()
-
-
-if __name__ == '__main__':
-    vecmap()
+    src_dict, tgt_dict = defaultdict(lambda: zeros(300)), defaultdict(lambda: zeros(300))
+    src_dict.update(zip(src_words, from_numpy(asnumpy(xw))))
+    tgt_dict.update(zip(trg_words, from_numpy(asnumpy(zw))))
+    return src_dict, tgt_dict

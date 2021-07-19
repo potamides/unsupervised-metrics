@@ -6,7 +6,6 @@ from os.path import join, isfile
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 from gzip import open as gopen
-from tempfile import NamedTemporaryFile as TempFile
 from mosestokenizer import MosesTokenizer
 from .vecmap.map_embeddings import vecmap
 from .dataset import DATADIR
@@ -56,20 +55,11 @@ def bert_embed(all_sens, batch_size, model, tokenizer, device):
 def map_multilingual_embeddings(src_lang, tgt_lang, batch_size, device):
     src_emb = get_embeddings_file(src_lang)
     tgt_emb = get_embeddings_file(tgt_lang)
-    src_dict, tgt_dict = defaultdict(lambda: torch.zeros(300)), defaultdict(lambda: torch.zeros(300))
 
-    with TempFile(dir=DATADIR, buffering=0) as src_map, TempFile(dir=DATADIR, buffering=0) as tgt_map:
-        arguments = ['--batch_size', str(batch_size), '--unsupervised', src_emb, tgt_emb, src_map.name, tgt_map.name]
-        if "cuda" in device:
-            arguments.insert(0, '--cuda')
-        vecmap(arguments)
-
-        for dict_, map_file in ((src_dict, src_map), (tgt_dict, tgt_map)):
-            for line in map_file.readlines()[1:]:
-                tokens = line.decode().rstrip().split(' ')
-                dict_[tokens[0]] = torch.tensor(list(map(float, tokens[1:])))
-
-    return src_dict, tgt_dict
+    arguments = ['--batch_size', str(batch_size), '--unsupervised', src_emb, tgt_emb]
+    if "cuda" in device:
+        arguments.insert(0, '--cuda')
+    return vecmap(arguments)
 
 def get_embeddings_file(lang_id):
     filename = f"cc.{lang_id}.300.vec"
@@ -90,7 +80,7 @@ def vecmap_embed(all_sents, lang_dict, lang):
     tokens, idf_weights, embeddings = list(), list(), list()
     with MosesTokenizer(lang) as tokenize:
         for sent in all_sents:
-            tokens.append([word for word in tokenize.word_tokenize(sent)])
+            tokens.append([word for word in tokenize(sent)])
             idf_weights.append([1] * len(tokens[-1]))
             embeddings.append(torch.stack([lang_dict[word] for word in tokens[-1]]))
 

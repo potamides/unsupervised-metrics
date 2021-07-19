@@ -22,12 +22,13 @@ class XMoverAlign(CommonScore):
         self.align_batch_size = align_batch_size
 
     def _mean_pool_embed(self, source_sents, target_sents):
-        source_sent_embeddings = torch.empty(len(source_sents), 768)
-        target_sent_embeddings = torch.empty(len(target_sents), 768)
-        idx = 0
+        source_sent_embeddings, target_sent_embeddings, idx = None, None, 0
         while idx < max(len(source_sents), len(target_sents)):
             src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
                 source_sents[idx:idx + self.align_batch_size], target_sents[idx:idx + self.align_batch_size])
+            if not source_sent_embeddings and not target_sent_embeddings:
+                source_sent_embeddings = torch.empty(len(source_sents), src_embeddings.shape[-1])
+                target_sent_embeddings = torch.empty(len(target_sents), tgt_embeddings.shape[-1])
             source_sent_embeddings[idx:idx + len(src_embeddings)] = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)
             target_sent_embeddings[idx:idx + len(tgt_embeddings)] = torch.sum(tgt_embeddings * tgt_mask, 1) / torch.sum(tgt_mask, 1)
             idx += self.align_batch_size

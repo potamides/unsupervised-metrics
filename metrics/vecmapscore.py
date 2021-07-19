@@ -11,12 +11,16 @@ class VecMapScore(CommonScore):
         device="cuda" if cuda_is_available() else "cpu",
         src_lang="en",
         tgt_lang="de",
-        batch_size=5000
+        batch_size=5000,
+        knn_batch_size = 1000000,
+        k = 5
     ):
         self.device = device
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.batch_size = batch_size
+        self.knn_batch_size = knn_batch_size
+        self.k = k
         self.src_dict = None
         self.tgt_dict = None
 
