@@ -167,7 +167,7 @@ class XMoverNMTAlign(XMoverAlign):
             sents = list(set(source_sents).difference([entry["translation"][self.src_lang] for entry in datasets['train']]))
 
             if not isfile(translation_file) or overwrite:
-                with open(translation_file) as f:
+                with open(translation_file, "wb") as f:
                     for src, tgt in zip(sents, self.translate(sents)):
                         line = { "translation": { self.src_lang: src, self.tgt_lang: tgt} }
                         f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
