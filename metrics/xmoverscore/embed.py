@@ -41,7 +41,7 @@ class BertEmbed(CommonScore):
     @cached_property
     def monolingual_tokenzier(self):
         if self.monolingual_model_name != self.model_name:
-            return BertTokenizer.from_pretrained(self.model_name, do_lower_case=self.do_lower_case)
+            return BertTokenizer.from_pretrained(self.monolingual_model_name, do_lower_case=self.do_lower_case)
         else:
             return self.tokenizer
 

@@ -4,12 +4,13 @@ from ..utils.nmt import train, translate
 from ..utils.perplexity import lm_perplexity
 from ..utils.dataset import DATADIR
 from ..common import CommonScore
-from os.path import isfile, join, basename
+from os.path import isfile, join
 from json import dumps
 from math import ceil
 from numpy import arange, array
 from nltk.metrics.distance import edit_distance
 from datasets import load_dataset
+from shutil import copyfile
 import logging
 import torch
 
@@ -167,19 +168,18 @@ class XMoverNMTAlign(XMoverAlign):
             sents = list(set(source_sents).difference([entry["translation"][self.src_lang] for entry in datasets['train']]))
 
             if not isfile(translation_file) or overwrite:
-                with open(translation_file, "wb") as f:
-                    for src, tgt in zip(sents, self.translate(sents)):
+                copyfile(mine_file, translation_file)
+                with open(translation_file, "ab") as f:
+                    for src, tgt in zip(sents, self.translate(sents[:self.train_size])):
                         line = { "translation": { self.src_lang: src, self.tgt_lang: tgt} }
                         f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-            model, _ = train(self.mt_model_name, f"{basename(self.mt_model_name)}-pretraining-{iteration}", self.src_lang,
-                    self.tgt_lang, translation_file, overwrite, suffix)
-            self.mt_model, self.mt_tokenizer = train(model.name_or_path, f"{basename(self.mt_model_name)}-{iteration}",
-                    self.src_lang, self.tgt_lang, mine_file, overwrite, suffix)
+            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, translation_file,
+                    overwrite, f"{suffix}-{iteration}")
         else:
             logging.info("Training MT model with pseudo parallel data.")
-            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, basename(self.mt_model_name), self.src_lang,
-                    self.tgt_lang, mine_file, overwrite, suffix)
+            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, mine_file,
+                    overwrite, suffix)
 
         self.mt_model.to(self.device)
 
