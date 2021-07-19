@@ -3,12 +3,13 @@ from ..utils.knn import wcd_align, ratio_margin_align, cosine_align
 from ..utils.nmt import train, translate
 from ..utils.perplexity import lm_perplexity
 from ..utils.dataset import DATADIR
-from os.path import isfile, join
+from ..common import CommonScore
+from os.path import isfile, join, basename
 from json import dumps
 from math import ceil
 from numpy import arange, array
 from nltk.metrics.distance import edit_distance
-from ..common import CommonScore
+from datasets import load_dataset
 import logging
 import torch
 
@@ -127,10 +128,10 @@ class XMoverNMTAlign(XMoverAlign):
             mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [self.nmt_weights[0] * score + self.nmt_weights[1] * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, suffix="data", overwrite=True, k=None):
-        file_path, batch, batch_size = join(DATADIR, f"mined-{suffix}.json"), 0, self.mine_batch_size
+    def train(self, source_sents, target_sents, suffix="data", iteration=1, overwrite=True, k=None):
+        mine_file, batch, batch_size = join(DATADIR, "translation", f"mined-{suffix}.json"), 0, self.mine_batch_size
         pairs, scores = list(), list()
-        if not isfile(file_path) or overwrite:
+        if not isfile(mine_file) or overwrite:
             while batch < len(source_sents):
                 logging.info("Obtaining sentence embeddings.")
                 batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
@@ -148,7 +149,7 @@ class XMoverNMTAlign(XMoverAlign):
                 del source_sent_embeddings, target_sent_embeddings
                 pairs.extend([(src + batch, tgt + batch) for src, tgt in batch_pairs]), scores.extend(batch_scores)
                 batch += batch_size
-            with open(file_path, "wb") as f:
+            with open(mine_file, "wb") as f:
                 idx = 0
                 for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
                     src_sent, tgt_sent = source_sents[src], target_sents[tgt]
@@ -159,9 +160,27 @@ class XMoverNMTAlign(XMoverAlign):
                     if idx >= self.train_size:
                         break
 
-        logging.info("Training MT model with pseudo parallel data.")
-        self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, file_path,
-                overwrite, suffix)
+        if self.mt_model is not None and self.mt_tokenizer is not None:
+            logging.info("Training MT model with translated and pseudo parallel data.")
+            datasets = load_dataset("json", data_files=mine_file)
+            translation_file = join(DATADIR, "translation", f"translated-{suffix}-{iteration}.json")
+            sents = list(set(source_sents).difference([entry["translation"][self.src_lang] for entry in datasets['train']]))
+
+            if not isfile(translation_file) or overwrite:
+                with open(translation_file) as f:
+                    for src, tgt in zip(sents, self.translate(sents)):
+                        line = { "translation": { self.src_lang: src, self.tgt_lang: tgt} }
+                        f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
+
+            model, _ = train(self.mt_model_name, f"{basename(self.mt_model_name)}-pretraining-{iteration}", self.src_lang,
+                    self.tgt_lang, translation_file, overwrite, suffix)
+            self.mt_model, self.mt_tokenizer = train(model.name_or_path, f"{basename(self.mt_model_name)}-{iteration}",
+                    self.src_lang, self.tgt_lang, mine_file, overwrite, suffix)
+        else:
+            logging.info("Training MT model with pseudo parallel data.")
+            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, basename(self.mt_model_name), self.src_lang,
+                    self.tgt_lang, mine_file, overwrite, suffix)
+
         self.mt_model.to(self.device)
 
     def translate(self, sentences):

@@ -313,14 +313,14 @@ def _train(args=None):
     return load_model_and_tokenizer(training_args.output_dir, data_args.source_lang,
             data_args.target_lang, model_args.use_fast_tokenizer, model_args.cache_dir)
 
-def train(model, source_lang, target_lang, dataset, overwrite, suffix):
+def train(model, folder, source_lang, target_lang, dataset, overwrite, suffix):
     if "mbart" in model:
         source_lang = language2mBART[source_lang]
         target_lang = language2mBART[target_lang]
     args = [
         "--model_name_or_path", model,
-        "--cache_dir", os.path.join(DATADIR, os.path.basename(model), suffix, "cache"),
-        "--output_dir", os.path.join(DATADIR, os.path.basename(model), suffix, "output"),
+        "--cache_dir", os.path.join(DATADIR, "translation", folder, suffix, "cache"),
+        "--output_dir", os.path.join(DATADIR, "translation", folder, suffix, "output"),
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,
