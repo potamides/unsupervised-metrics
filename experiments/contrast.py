@@ -8,8 +8,8 @@ import logging
 source_lang, target_lang = "de", "en"
 iterations = 5
 
-def contrastive_tests(max_len=30):
-    scorer = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
+def contrastive_tests(max_len=30, model="xlm-roberta-base"):
+    scorer = ContrastScore(model_name=model, source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     eval_src, eval_system, eval_scores = dataset.load("scored")
     parallel_src, parallel_tgt = dataset.load("parallel")
@@ -45,5 +45,7 @@ def contrastive_tests(max_len=30):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-print(contrastive_tests(max_len=30))
+print("Contrastive learning with XLM-R", contrastive_tests(max_len=30), sep="\n")
 print(contrastive_tests(max_len=50))
+print("Contrastive learning with mBERT", contrastive_tests(max_len=30, model="bert-base-multilingual-cased"), sep="\n")
+print(contrastive_tests(max_len=50, model="bert-base-multilingual-cased"))
