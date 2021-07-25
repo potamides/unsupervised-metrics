@@ -48,4 +48,3 @@ logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime
 print("Contrastive learning with XLM-R", contrastive_tests(max_len=30), sep="\n")
 print(contrastive_tests(max_len=50))
 print("Contrastive learning with mBERT", contrastive_tests(max_len=30, model="bert-base-multilingual-cased"), sep="\n")
-print(contrastive_tests(max_len=50, model="bert-base-multilingual-cased"))

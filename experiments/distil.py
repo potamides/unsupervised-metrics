@@ -6,10 +6,10 @@ from metrics.utils.dataset import DatasetLoader
 import logging
 
 source_lang, target_lang = "de", "en"
-iterations = 1
+iterations = 5
 
-def distil_tests():
-    scorer = DistilScore(source_language=source_lang, target_language=target_lang, suffix="1")
+def distil_tests(model="xlm-roberta-base"):
+    scorer = DistilScore(student_model_name=model, source_language=source_lang, target_language=target_lang, suffix="1")
     dataset = DatasetLoader(source_lang, target_lang)
     eval_src, eval_system, eval_scores = dataset.load("scored")
     results, index = defaultdict(list), list(range(iterations + 1))
@@ -41,4 +41,5 @@ def distil_tests():
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-print(distil_tests())
+print("Results using XLM-R as student:", distil_tests(), sep="\n")
+print("Results using mBERT as student:", distil_tests(model="bert-base-multilingual-cased"), sep="\n")
