@@ -25,7 +25,8 @@ def correlation(model_scores, ref_scores):
     return corrcoef(ref_scores, model_scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
 
 def combine_tests(max_len=30):
-    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, nmt_weights=[0.5, 0.5])
+    assert target_lang == "en", "Target language has to be English for LM to work"
+    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[0.9, 0.1], nmt_weights=[0.5, 0.5], use_lm=True)
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
