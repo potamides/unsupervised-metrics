@@ -25,15 +25,15 @@ from metrics.utils.dataset import DatasetLoader
 src_lang, tgt_lang = "de", "en"
 
 dataset = DatasetLoader(src_lang, tgt_lang)
-# instantiate XMoverScore with custom weights and enable language model
-scorer = XMoverScore(src_lang=src_lang, tgt_lang=tgt_lang, lm_weights=[0.9, 0.1], nmt_weights=[0.5, 0.5], use_lm=True)
+# instantiate XMoverScore and enable language model
+scorer = XMoverScore(src_lang=src_lang, tgt_lang=tgt_lang, use_lm=True)
 # remap XMoverScore with UMD
 scorer.remap(*dataset.load("monolingual-align"))
-# combine XMoverScore with NMT model
+# train NMT model to leverage pseudo translations
 scorer.train(*dataset.load("monolingual-train"), k=1)
 
 # print correlations with human judgments
-print("Pearson correlation: {}, Spearman correlation: {}".format(*scorer.correlation(*dataset.load("scored"))))
+print("Pearson's r: {}, Spearman's ρ: {}".format(*scorer.correlation(*dataset.load("scored"))))
 ```
 
 For more involved examples take a look at the [experiments](experiments).
