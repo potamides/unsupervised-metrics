@@ -32,11 +32,11 @@ class SentSim(CommonScore):
     ):
         if use_wmd:
             self.tokenizer, self.word_model = self.get_WMD_Model(wordemb_model)
-            self.layers = self.layer_processing(wordemb_model)
+            self.layers = self.layer_processing(self.word_model)
         else:
             self.word_model = wordemb_model
         self.use_wmd = use_wmd
-        self.sent_model = SentenceTransformer(sentemb_model)
+        self.sent_model = SentenceTransformer(sentemb_model, device=device)
         self.knn_batch_size = knn_batch_size
         self.mine_batch_size = mine_batch_size
         self.device = device
@@ -57,7 +57,7 @@ class SentSim(CommonScore):
         return sent_pairs, scores
 
     def score(self, source_sents, target_sents):
-        cosine = self.getSentSimilarity(target_sents, source_sents, self.sent_model)
+        cosine = self.getSentSimilarity(target_sents, source_sents)
         if self.use_wmd:
             wmd = self.compute_WMD(target_sents, source_sents, self.tokenizer, self.word_model)
             return self.combine_metrics(cosine, wmd, corr=[1, -1])
@@ -81,20 +81,19 @@ class SentSim(CommonScore):
 
         return output
 
-    def getSentSimilarity(_, sents1, sents2, model):
-        embed_sent1 = model.encode(sents1, convert_to_tensor=True)
-        embed_sent2 = model.encode(sents2, convert_to_tensor=True)
+    def getSentSimilarity(self, sents1, sents2):
+        embed_sent1, embed_sent2 = self._embed(sents1, sents2)
         cos_sim = CosineSimilarity(dim=1)(embed_sent1,embed_sent2)
         # Normalized
         cos_sim = (cos_sim -torch.min(cos_sim))/ (torch.max(cos_sim)-torch.min(cos_sim))
-        return cos_sim.cpu().numpy()
+        return cos_sim.numpy()
 
     def getBertScore(_, sents1, sents2, model):
         bert_score_metric = load_metric('bertscore', keep_in_memory=True, cache_dir=DATADIR)
         bert_score_metric.add_batch(predictions=sents2, references=sents1)
-        score = bert_score_metric.compute(model_type=model)
+        score = torch.tensor(bert_score_metric.compute(model_type=model)["f1"])
         # Normalized Bert Score F1
-        norm_score = (score["f1"] -torch.min(score["f1"]))/ (torch.max(score["f1"])-torch.min(score["f1"]))
+        norm_score = (score - torch.min(score)) / (torch.max(score) - torch.min(score))
         return norm_score.tolist()
 
     def compute_WMD(self, hypotheses, references, tokenizer, model, embed_type=False):
@@ -133,7 +132,7 @@ class SentSim(CommonScore):
         if lpFile!=None:
             prob.writeLP(lpFile)
 
-        prob.solve()
+        prob.solve(pulp.apis.PULP_CBC_CMD(msg=0))
         return prob
 
     def embedding_processing(self, sent1, sent2, tokenizer, model, embed_type=False):

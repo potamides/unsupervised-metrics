@@ -1,12 +1,12 @@
 from setuptools import setup, find_namespace_packages
 
 setup(name='unsupervised-metrics',
-    version='0.1',
+    version='1.0',
     description='Self-Learning for Unsupervised Metrics',
     keywords = ["Unsupervised", "Metrics", "Quality Estimation", "Machine Translation", "NLP", "Deep Learning"],
     url='https://github.com/potamides/unsupervised-metrics',
     author='Jonas Belouadi',
-    author_email='jonasjohannesfranz.belouadi@stud.tu-darmstadt.de',
+    author_email='jonas.belouadi@posteo.net',
     packages=find_namespace_packages(include=["metrics*"]),
     install_requires=[
         "tqdm==4.49.0",
@@ -23,6 +23,7 @@ setup(name='unsupervised-metrics',
         "mosestokenizer==1.1.0",
         "simalign @ https://github.com/cisnlp/simalign/archive/refs/tags/v0.2.zip",
         "PuLP==2.4",
+        "bert-score==0.3.9",
         "truecase==0.0.12",
         "tabulate==0.8.9"
     ],
