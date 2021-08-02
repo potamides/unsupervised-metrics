@@ -22,6 +22,7 @@ setup(name='unsupervised-metrics',
         "sentencepiece==0.1.95",
         "mosestokenizer==1.1.0",
         "simalign @ https://github.com/cisnlp/simalign/archive/refs/tags/v0.2.zip",
+        "PuLP==2.4",
         "truecase==0.0.12",
         "tabulate==0.8.9"
     ],
