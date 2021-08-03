@@ -88,10 +88,10 @@ class SentSim(CommonScore):
         cos_sim = (cos_sim -torch.min(cos_sim))/ (torch.max(cos_sim)-torch.min(cos_sim))
         return cos_sim.numpy()
 
-    def getBertScore(_, sents1, sents2, model):
+    def getBertScore(self, sents1, sents2, model):
         bert_score_metric = load_metric('bertscore', keep_in_memory=True, cache_dir=DATADIR)
         bert_score_metric.add_batch(predictions=sents2, references=sents1)
-        score = torch.tensor(bert_score_metric.compute(model_type=model)["f1"])
+        score = torch.tensor(bert_score_metric.compute(model_type=model, device=self.device)["f1"])
         # Normalized Bert Score F1
         norm_score = (score - torch.min(score)) / (torch.max(score) - torch.min(score))
         return norm_score.tolist()

@@ -154,7 +154,7 @@ class DatasetLoader():
                 self.download(self.monolingual_data, version)
                 patterns = ['https?://', str(version) + ", \d{1,2}:\d{2}"] # filter urls and date strings
                 mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
-                if isfile(join(mpath, mfiles[0])):
+                if isfile(join(mpath, mfiles[0])) and isfile(join(mpath, mfiles[1])):
                     with gopen(join(mpath, mfiles[0]), "rt") as f, MosesTokenizer(self.source_lang) as src_tokenize, \
                     MosesSentenceSplitter(self.source_lang, False) as src_split:
                         for src in f:
@@ -163,7 +163,6 @@ class DatasetLoader():
                             and len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
                             and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
                                 mono_source.add(src.strip())
-                if isfile(join(mpath, mfiles[1])):
                     with gopen(join(mpath, mfiles[1]), "rt") as g, MosesTokenizer(self.target_lang) as tgt_tokenize, \
                     MosesSentenceSplitter(self.target_lang, False) as tgt_split:
                         for tgt in g:
