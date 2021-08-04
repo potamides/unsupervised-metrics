@@ -28,7 +28,7 @@ class XMoverAlign(CommonScore):
         while idx < max(len(source_sents), len(target_sents)):
             src_embeddings, _, _, src_mask, tgt_embeddings, _, _, tgt_mask = self._embed(
                 source_sents[idx:idx + self.align_batch_size], target_sents[idx:idx + self.align_batch_size])
-            if not source_sent_embeddings and not target_sent_embeddings:
+            if source_sent_embeddings is None and target_sent_embeddings is None:
                 source_sent_embeddings = torch.empty(len(source_sents), src_embeddings.shape[-1])
                 target_sent_embeddings = torch.empty(len(target_sents), tgt_embeddings.shape[-1])
             source_sent_embeddings[idx:idx + len(src_embeddings)] = torch.sum(src_embeddings * src_mask, 1) / torch.sum(src_mask, 1)

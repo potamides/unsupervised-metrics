@@ -14,6 +14,7 @@ from truecase import get_true_case
 from tqdm import tqdm
 from logging import warn
 from re import search
+from pickle import load, dump
 from fasttext import FastText, load_model
 from collections import defaultdict
 
@@ -149,6 +150,10 @@ class DatasetLoader():
             return parallel_source, parallel_target
 
         elif name in ["monolingual-align", "monolingual-train"]:
+            cache_file = join(DATADIR, "preprocessed-datasets", f"{name}-{self.source_lang}-{self.target_lang}.pkl")
+            if isfile(cache_file):
+                with open(cache_file, 'rb') as f:
+                    return load(f)
             mono_source, mono_target, langdetect = set(), set(), LangDetect()
             for version in self.monolingual_data["versions"]:
                 self.download(self.monolingual_data, version)
@@ -175,7 +180,10 @@ class DatasetLoader():
                     break
             else:
                 warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
-            return list(mono_source), list(mono_target)
+            with open(cache_file, 'wb') as f:
+                mono_source, mono_target = list(mono_source), list(mono_target)
+                dump((mono_source, mono_target), f)
+                return mono_source, mono_target
 
         elif name in ["scored", "scored-mlqe", "scored-wmt"]:
             eval_source, eval_system, eval_scores = list(), list(), list()

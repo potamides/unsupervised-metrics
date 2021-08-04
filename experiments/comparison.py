@@ -22,10 +22,10 @@ def correlation(model_scores, ref_scores):
     ref_ranks, ranks = argsort(ref_scores).argsort(), argsort(model_scores).argsort()
     return corrcoef(ref_scores, model_scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
 
-def xmoverscore_tests(source_lang, target_lang, dataset, mapping="UMD"):
+def xmoverscore_tests(source_lang, target_lang, dataset_name, mapping="UMD"):
     scorer = XMoverScore(mapping=mapping, use_lm=target_lang=="en")
     dataset = DatasetLoader(source_lang, target_lang)
-    eval_src, eval_system, eval_scores = dataset.load(dataset)
+    eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), [f"XMoverScore ({mapping})"]
 
     scorer.remap(source_lang, target_lang)
@@ -36,10 +36,10 @@ def xmoverscore_tests(source_lang, target_lang, dataset, mapping="UMD"):
 
     return tabulate(results, headers="keys", showindex=index)
 
-def sentsim_tests(source_lang, target_lang, dataset, word_metric="BERTScore"):
+def sentsim_tests(source_lang, target_lang, dataset_name, word_metric="BERTScore"):
     scorer = SentSim(use_wmd=word_metric=="WMD")
     dataset = DatasetLoader(source_lang, target_lang)
-    eval_src, eval_system, eval_scores = dataset.load(dataset)
+    eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), [f"SentSim ({word_metric})"]
 
     pearson, spearman = scorer.correlation(eval_src, eval_system, eval_scores)
@@ -49,11 +49,11 @@ def sentsim_tests(source_lang, target_lang, dataset, word_metric="BERTScore"):
 
     return tabulate(results, headers="keys", showindex=index)
 
-def distilscore_tests(source_lang, target_lang, dataset):
-    scorer = DistilScore(student_model_name="bert-base-nli-stsb-mean-tokens", source_language=source_lang,
+def distilscore_tests(source_lang, target_lang, dataset_name):
+    scorer = DistilScore(student_model_name="xlm-r-bert-base-nli-stsb-mean-tokens", source_language=source_lang,
             target_language=target_lang, suffix="1")
     dataset = DatasetLoader(source_lang, target_lang)
-    eval_src, eval_system, eval_scores = dataset.load(dataset)
+    eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), ["DistilScore"]
 
     pearson, spearman = scorer.correlation(eval_src, eval_system, eval_scores)
@@ -63,19 +63,17 @@ def distilscore_tests(source_lang, target_lang, dataset):
 
     return tabulate(results, headers="keys", showindex=index)
 
-def self_learning_tests(source_lang, target_lang, dataset, max_len=30):
+def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
     xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[0.9, 0.1],
             nmt_weights=[0.5, 0.5], use_lm=target_lang == "en")
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
-    eval_src, eval_system, eval_scores = dataset.load(dataset)
-    if not {'train_src', 'train_tgt'}.issubset(globals()):
-        global train_src, train_tgt
-        train_src, train_tgt = dataset.load("monolingual-train")
+    train_src, train_tgt = dataset.load("monolingual-train")
+    eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
-    results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", "ContrastScore ({max_len} tokens)"
-            "XMoverScore + ContrastScore ({max_len} tokens)"]
+    results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"ContrastScore ({max_len} tokens)"
+            f"XMoverScore + ContrastScore ({max_len} tokens)"]
 
     logging.info("Evaluating XMoverScore")
     for iteration in range(1, remap_iterations + 1):
@@ -94,7 +92,7 @@ def self_learning_tests(source_lang, target_lang, dataset, max_len=30):
     for iteration in range(1, contrast_iterations + 1):
         logging.info(f"Contrastive Learning iteration {iteration}.")
         contrast.suffix = f"{max_len}-{iteration}"
-        contrast.train(mono_src, mono_tgt, overwrite=False)
+        contrast.train(train_src, train_tgt, overwrite=False)
 
     pearson, spearman = contrast.correlation(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
@@ -112,8 +110,8 @@ def self_learning_tests(source_lang, target_lang, dataset, max_len=30):
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 for dataset, identifier, pairs in (("Newstest-2016", "scored", newstest), ("MLQE-PE", "scored-mlqe", mlqpe)):
     for source_lang, target_lang in pairs:
-        if not source_lang in ["si", "en"] and not target_lang in ["si", "en"]: # TODO: find data for these languages
-            print("Evaluating {source_lang}-{target_lang} language direction on {dataset}")
+        if not source_lang in ["si", "ne"] and not target_lang in ["si", "ne"]: # TODO: find data for these languages
+            print(f"Evaluating {source_lang}-{target_lang} language direction on {dataset}")
             print(self_learning_tests(source_lang, target_lang, identifier, max_len=30))
             print(self_learning_tests(source_lang, target_lang, identifier, max_len=50))
             print(xmoverscore_tests(source_lang, target_lang, identifier, mapping="UMD"))

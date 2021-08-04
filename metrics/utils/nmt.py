@@ -341,4 +341,4 @@ def translate(model, tokenizer, sentences, batch_size, device):
     return translated
 
 if __name__ == "__main__":
-    train()
+    _train()

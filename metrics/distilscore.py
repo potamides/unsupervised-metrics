@@ -25,6 +25,7 @@ class DistilScore(CommonScore):
         source_language="en",
         target_language="de",
         device="cuda" if cuda_is_available() else "cpu",
+        student_is_pretrained=False,
         train_batch_size=64,                # Batch size for training
         inference_batch_size=64,            # Batch size at inference
         num_epochs=10,                      # Train for x epochs
@@ -49,7 +50,10 @@ class DistilScore(CommonScore):
         self.cache_dir = join(DATADIR, "distillation",
             f"{'-'.join(sorted([source_language, target_language]))}-{basename(teacher_model_name)}-{basename(student_model_name)}")
         self.suffix = suffix
-        self.model = self.load_student(student_model_name)
+        if student_is_pretrained:
+            self.model = SentenceTransformer(student_model_name, device=self.device)
+        else:
+            self.model = self.load_student(student_model_name)
 
     def load_student(self, model_name):
         logging.info("Creating model from scratch")
