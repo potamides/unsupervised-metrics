@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 from csv import reader, QUOTE_NONE
 from itertools import islice
-from os import getenv
-from os.path import isfile, join
+from os import getenv, makedirs
+from os.path import isfile, join, dirname
 from gzip import open as gopen
 from tarfile import open as topen
 from urllib.request import urlretrieve
@@ -151,6 +151,7 @@ class DatasetLoader():
 
         elif name in ["monolingual-align", "monolingual-train"]:
             cache_file = join(DATADIR, "preprocessed-datasets", f"{name}-{self.source_lang}-{self.target_lang}.pkl")
+            makedirs(dirname(cache_file), exist_ok=True)
             if isfile(cache_file):
                 with open(cache_file, 'rb') as f:
                     return load(f)
