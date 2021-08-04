@@ -51,7 +51,7 @@ def sentsim_tests(source_lang, target_lang, dataset_name, word_metric="BERTScore
 
 def distilscore_tests(source_lang, target_lang, dataset_name):
     scorer = DistilScore(student_model_name="xlm-r-bert-base-nli-stsb-mean-tokens", source_language=source_lang,
-            target_language=target_lang, suffix="1")
+            target_language=target_lang, student_is_pretrained=True, suffix="1")
     dataset = DatasetLoader(source_lang, target_lang)
     eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), ["DistilScore"]
