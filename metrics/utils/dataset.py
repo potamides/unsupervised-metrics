@@ -150,7 +150,8 @@ class DatasetLoader():
             return parallel_source, parallel_target
 
         elif name in ["monolingual-align", "monolingual-train"]:
-            cache_file = join(DATADIR, "preprocessed-datasets", f"{name}-{self.source_lang}-{self.target_lang}.pkl")
+            cache_file = join(DATADIR, "preprocessed-datasets",
+                    f"{name}-{self.source_lang}-{self.target_lang}-{self.min_monolingual_sent_len}-{self.max_monolingual_sent_len}.pkl")
             makedirs(dirname(cache_file), exist_ok=True)
             if isfile(cache_file):
                 with open(cache_file, 'rb') as f:
