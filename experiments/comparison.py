@@ -11,7 +11,7 @@ from tabulate import tabulate
 from numpy import corrcoef, argsort
 import logging
 
-newstest = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("zh", "en"), ("fi", "en"), ("tr", "en")]
+newstest = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
 mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
 
 remap_iterations = 1
@@ -64,15 +64,15 @@ def distilscore_tests(source_lang, target_lang, dataset_name):
     return tabulate(results, headers="keys", showindex=index)
 
 def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
-    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[0.9, 0.1],
-            nmt_weights=[0.5, 0.5], use_lm=target_lang == "en")
+    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1],
+            nmt_weights=[0.5, 0.4], use_lm=target_lang == "en")
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
     train_src, train_tgt = dataset.load("monolingual-train")
     eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
-    results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"ContrastScore ({max_len} tokens)"
+    results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"ContrastScore ({max_len} tokens)",
             f"XMoverScore + ContrastScore ({max_len} tokens)"]
 
     logging.info("Evaluating XMoverScore")
@@ -102,6 +102,7 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
     logging.info("Evaluating XMoverScore + ContrastScore")
     wmd_scores, contrast_scores = xmover.score(eval_src, eval_system), contrast.score(eval_src, eval_system)
     pearson, spearman = correlation([0.8 * x + 0.2 * y for x, y in zip(wmd_scores, contrast_scores)], eval_scores)
+    logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
 

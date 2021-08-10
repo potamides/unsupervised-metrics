@@ -26,14 +26,12 @@ def correlation(model_scores, ref_scores):
 
 def combine_tests(max_len=30):
     assert target_lang == "en", "Target language has to be English for LM to work"
-    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[0.9, 0.1], nmt_weights=[0.5, 0.5], use_lm=True)
+    xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1], nmt_weights=[0.5, 0.4], use_lm=True)
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
     eval_src, eval_system, eval_scores = dataset.load("scored")
-    if not {'train_src', 'train_tgt'}.issubset(globals()):
-        global train_src, train_tgt
-        train_src, train_tgt = dataset.load("monolingual-train")
+    train_src, train_tgt = dataset.load("monolingual-train")
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
     results, index = defaultdict(list), [f"{round(weight, 2)}-{round(1-weight, 2)}" for weight in linspace(1, 0, 11)]
 
