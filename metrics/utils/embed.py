@@ -22,8 +22,8 @@ def padding(arr, pad_token, dtype=torch.long):
         mask[i, :lens[i]] = 1
     return padded, mask
 
-def collate_idf(arr, tokenize, numericalize):
-    tokens = [["[CLS]"] + tokenize(a) + ["[SEP]"] for a in arr]
+def collate_idf(arr, tokenize, numericalize, max_len):
+    tokens = [["[CLS]"] + tokenize(a)[:max_len] + ["[SEP]"] for a in arr]
     arr = [numericalize(a) for a in tokens]
     idf_dict = defaultdict(lambda: 1.)
     idf_weights = [[idf_dict[i] for i in a] for a in arr]
@@ -36,8 +36,8 @@ def collate_idf(arr, tokenize, numericalize):
 def bert_embed(all_sens, batch_size, model, tokenizer, device):
     if len(all_sens) == 0:
         return torch.empty(0, 0, 768), torch.empty(0, 0, 1), list(), torch.empty(0, 0, 1)
-    padded_sens, padded_idf, mask, tokens = collate_idf(all_sens, tokenizer.tokenize,
-            tokenizer.convert_tokens_to_ids)
+    padded_sens, padded_idf, mask, tokens = collate_idf(all_sens, tokenizer.tokenize, tokenizer.convert_tokens_to_ids,
+            tokenizer.max_len_single_sentence)
     data = TensorDataset(padded_sens, mask)
     sampler = SequentialSampler(data)
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
