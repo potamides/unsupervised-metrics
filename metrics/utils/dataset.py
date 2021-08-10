@@ -4,6 +4,7 @@ from itertools import islice
 from os import getenv, makedirs
 from os.path import isfile, join, dirname
 from gzip import open as gopen
+from lzma import open as xopen
 from tarfile import open as topen
 from urllib.request import urlretrieve
 from urllib.error import URLError
@@ -65,6 +66,16 @@ class DatasetLoader():
                 f"http://data.statmt.org/news-crawl/{self.source_lang}",
                 f"http://data.statmt.org/news-crawl/{self.target_lang}"
             ),
+            "fallback": {
+                "filenames": (
+                    f"{self.source_lang}.txt.xz",
+                    f"{self.target_lang}.txt.xz"
+                ),
+                "urls": (
+                    "http://data.statmt.org/cc-100",
+                    "http://data.statmt.org/cc-100"
+                ),
+            },
             "versions": list(range(2007, 2021)),
             "samples": (40000, 4000000),
         }
@@ -133,6 +144,28 @@ class DatasetLoader():
                     if e.status != 404:
                         raise
 
+    def cc100_iter(self, language):
+        filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
+        with xopen(join(DATADIR, filename)) as f, MosesSentenceSplitter(language, False) as sent_split:
+            for line in f:
+                if len(line.strip()) == 0:
+                    for sentence in sent_split(lines):
+                        yield sentence
+                    lines.clear()
+                else:
+                    lines.append(line.decode())
+
+    def filter(self, lang, sents, iterator, size, exclude):
+        langdetect = LangDetect()
+        with MosesTokenizer(lang) as tokenize, MosesSentenceSplitter(lang, False) as sent_split:
+            for sent in iterator:
+                if len(sents) < size and all(not search(pattern, sent) for pattern in exclude) \
+                and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang \
+                and self.min_monolingual_sent_len <= len(tokenize(sent)) <= self.max_monolingual_sent_len:
+                    input(sent.strip())
+                    sents.add(sent.strip())
+        return sents
+
     def load(self, name):
         if name in ["parallel", "parallel-align"]:
             self.download(self.parallel_data)
@@ -150,38 +183,38 @@ class DatasetLoader():
             return parallel_source, parallel_target
 
         elif name in ["monolingual-align", "monolingual-train"]:
+            samples, patterns = self.monolingual_data["samples"][1 if name.endswith("train") else 0], list()
             cache_file = join(DATADIR, "preprocessed-datasets",
                     f"{name}-{self.source_lang}-{self.target_lang}-{self.min_monolingual_sent_len}-{self.max_monolingual_sent_len}.pkl")
             makedirs(dirname(cache_file), exist_ok=True)
             if isfile(cache_file):
                 with open(cache_file, 'rb') as f:
                     return load(f)
-            mono_source, mono_target, langdetect = set(), set(), LangDetect()
+            mono_source, mono_target = set(), set()
             for version in self.monolingual_data["versions"]:
                 self.download(self.monolingual_data, version)
                 patterns = ['https?://', str(version) + ", \d{1,2}:\d{2}"] # filter urls and date strings
                 mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
                 if isfile(join(mpath, mfiles[0])) and isfile(join(mpath, mfiles[1])):
-                    with gopen(join(mpath, mfiles[0]), "rt") as f, MosesTokenizer(self.source_lang) as src_tokenize, \
-                    MosesSentenceSplitter(self.source_lang, False) as src_split:
-                        for src in f:
-                            if len(mono_source) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
-                            and all(not search(pat, src) for pat in patterns) \
-                            and len(src_split([src])) == 1 and langdetect.detect(src) == self.source_lang \
-                            and self.min_monolingual_sent_len <= len(src_tokenize(src)) <= self.max_monolingual_sent_len:
-                                mono_source.add(src.strip())
-                    with gopen(join(mpath, mfiles[1]), "rt") as g, MosesTokenizer(self.target_lang) as tgt_tokenize, \
-                    MosesSentenceSplitter(self.target_lang, False) as tgt_split:
-                        for tgt in g:
-                            if len(mono_target) < self.monolingual_data["samples"][1 if name.endswith("train") else 0] \
-                            and all(not search(pat, tgt) for pat in patterns) \
-                            and len(tgt_split([tgt])) == 1 and langdetect.detect(tgt) == self.target_lang \
-                            and self.min_monolingual_sent_len <= len(tgt_tokenize(tgt)) < self.max_monolingual_sent_len:
-                                mono_target.add(tgt.strip())
-                if min(len(mono_source), len(mono_target)) >= self.monolingual_data["samples"][1 if name.endswith("train") else 0]:
+                    with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g:
+                        pass
+                        mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+                        mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
+                elif version == self.monolingual_data["versions"][-1]:
+                    if isfile(join(mpath, mfiles[0])):
+                        with gopen(join(mpath, mfiles[0]), "rt") as f:
+                            mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+                    if isfile(join(mpath, mfiles[1])):
+                        with gopen(join(mpath, mfiles[1]), "rt") as g:
+                            mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
+                if min(len(mono_source), len(mono_target)) >= samples:
                     break
             else:
-                warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
+                self.download(self.monolingual_data["fallback"])
+                mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
+                mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
+                if min(len(mono_source), len(mono_target)) < samples:
+                    warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
             with open(cache_file, 'wb') as f:
                 mono_source, mono_target = list(mono_source), list(mono_target)
                 dump((mono_source, mono_target), f)
