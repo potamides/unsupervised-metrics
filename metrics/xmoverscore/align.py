@@ -81,11 +81,12 @@ class XMoverLMAlign(XMoverAlign):
     Extends XMoverScore based sentence aligner with an additional language model.
     """
 
-    def __init__(self, device, k, n_gram, knn_batch_size, align_batch_size, use_cosine, use_lm, lm_weights):
+    def __init__(self, device, k, n_gram, knn_batch_size, align_batch_size, use_cosine, use_lm, lm_weights, lm_model_name):
         super().__init__(device, k, n_gram, knn_batch_size, use_cosine, align_batch_size)
         self.device = device
         self.use_lm = use_lm
         self.lm_weights = lm_weights
+        self.lm_model_name = lm_model_name
 
     #Override
     def score(self, source_sents, target_sents):
@@ -95,7 +96,7 @@ class XMoverLMAlign(XMoverAlign):
         """
         wmd_scores = super().score(source_sents, target_sents)
         if self.use_lm:
-            lm_scores = lm_perplexity(target_sents, self.device)
+            lm_scores = lm_perplexity(target_sents, self.device, self.lm_model_name)
             return (self.lm_weights[0] * array(wmd_scores) + self.lm_weights[1] * array(lm_scores)).tolist()
         else:
             return wmd_scores
@@ -192,13 +193,14 @@ class XMoverNMTLMAlign(XMoverNMTAlign):
     Combine NMT and LM XMoverScore extensions.
     """
 
-    def __init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
-            mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size, use_lm, lm_weights):
+    def __init__(self, device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang, mt_model_name,
+            translate_batch_size, nmt_weights, use_cosine, mine_batch_size, use_lm, lm_weights, lm_model_name):
         super().__init__(device, k, n_gram, knn_batch_size, train_size, align_batch_size, src_lang, tgt_lang,
                 mt_model_name, translate_batch_size, nmt_weights, use_cosine, mine_batch_size)
         self.device = device
         self.use_lm = use_lm
         self.lm_weights = lm_weights
+        self.lm_model_name = lm_model_name
 
     #Override
     def score(self, source_sents, target_sents):
@@ -209,7 +211,7 @@ class XMoverNMTLMAlign(XMoverNMTAlign):
         """
         nmt_scores = super().score(source_sents, target_sents)
         if self.use_lm:
-            lm_scores = lm_perplexity(target_sents, self.device)
+            lm_scores = lm_perplexity(target_sents, self.device, self.lm_model_name)
             return (self.lm_weights[0] * array(nmt_scores) + self.lm_weights[1] * array(lm_scores)).tolist()
         else:
             return nmt_scores

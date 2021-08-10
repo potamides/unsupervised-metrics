@@ -64,8 +64,10 @@ def distilscore_tests(source_lang, target_lang, dataset_name):
     return tabulate(results, headers="keys", showindex=index)
 
 def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
+    lm_model = {"en": "gpt2", "ru": "sberbank-ai/rugpt3small_based_on_gpt2", "de": "dbmdz/german-gpt2",
+            "zh": ["ckiplab/gpt2-base-chinese", 'bert-base-chinese']}
     xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1],
-            nmt_weights=[0.5, 0.4], use_lm=target_lang == "en")
+            nmt_weights=[0.5, 0.4], use_lm=True, lm_model_name=lm_model[target_lang])
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")

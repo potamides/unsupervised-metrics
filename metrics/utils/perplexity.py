@@ -1,9 +1,13 @@
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoModel, AutoTokenizer
 from torch import tensor
 
-def lm_perplexity(hyps, device):
-    model = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+def lm_perplexity(hyps, device, name="gpt2"):
+    # Some models need a special tokenizer, like chinese gpt2, see here:
+    # https://huggingface.co/ckiplab/gpt2-base-chinese
+    model_name, tokenizer_name = name, name if isinstance(name, str) else name
+
+    model = AutoModel.from_pretrained(model_name).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     scores = list()
     model.eval()
