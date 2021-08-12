@@ -6,7 +6,7 @@ setup(name='unsupervised-metrics',
     keywords = ["Unsupervised", "Metrics", "Quality Estimation", "Machine Translation", "NLP", "Deep Learning"],
     url='https://github.com/potamides/unsupervised-metrics',
     author='Jonas Belouadi',
-    author_email='jonas.belouadi@posteo.net',
+    author_email='potamides@posteo.net',
     packages=find_namespace_packages(include=["metrics*"]),
     install_requires=[
         "tqdm==4.49.0",
