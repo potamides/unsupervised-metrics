@@ -67,7 +67,7 @@ class DistilScore(CommonScore):
         if "mbart" in model_name:
             mbart, detector = word_embedding_model.auto_model, LangDetect()
             mbart.forward = lambda **kv: type(mbart).forward(mbart, **kv)[-1:]
-            
+
             def tokenize(text):
                 model.tokenizer.src_lang = language2mBART[detector.detect(text)]
                 return word_embedding_model.tokenize(text)
@@ -87,7 +87,7 @@ class DistilScore(CommonScore):
 
     def align(self, source_sents, target_sents):
         source_embeddings, target_embeddings = self._embed(source_sents, target_sents)
-        indeces, scores = ratio_margin_align(source_embeddings, target_embeddings, self.k,
+        indeces, scores = ratio_margin_align(from_numpy(source_embeddings), from_numpy(target_embeddings), self.k,
                 self.knn_batch_size, self.device)
 
         sent_pairs = [(source_sents[src_idx], target_sents[tgt_idx]) for src_idx, tgt_idx in indeces]
