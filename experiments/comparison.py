@@ -113,12 +113,11 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 for dataset, identifier, pairs in (("Newstest-2016", "scored", newstest), ("MLQE-PE", "scored-mlqe", mlqpe)):
     for source_lang, target_lang in pairs:
-        if not source_lang in ["si", "ne"] and not target_lang in ["si", "ne"]: # TODO: find data for these languages
-            print(f"Evaluating {source_lang}-{target_lang} language direction on {dataset}")
-            print(self_learning_tests(source_lang, target_lang, identifier, max_len=30))
-            print(self_learning_tests(source_lang, target_lang, identifier, max_len=50))
-            print(xmoverscore_tests(source_lang, target_lang, identifier, mapping="UMD"))
-            print(xmoverscore_tests(source_lang, target_lang, identifier, mapping="CLP"))
-            print(sentsim_tests(source_lang, target_lang, identifier, word_metric="BERTScore"))
-            print(sentsim_tests(source_lang, target_lang, identifier, word_metric="WMD"))
-            print(distilscore_tests(source_lang, target_lang, identifier))
+        print(f"Evaluating {source_lang}-{target_lang} language direction on {dataset}")
+        print(self_learning_tests(source_lang, target_lang, identifier, max_len=30))
+        print(self_learning_tests(source_lang, target_lang, identifier, max_len=50))
+        print(xmoverscore_tests(source_lang, target_lang, identifier, mapping="UMD"))
+        print(xmoverscore_tests(source_lang, target_lang, identifier, mapping="CLP"))
+        print(sentsim_tests(source_lang, target_lang, identifier, word_metric="BERTScore"))
+        print(sentsim_tests(source_lang, target_lang, identifier, word_metric="WMD"))
+        print(distilscore_tests(source_lang, target_lang, identifier))
