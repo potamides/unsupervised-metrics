@@ -10,43 +10,16 @@ from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
 from io import TextIOWrapper
-from mosestokenizer import MosesTokenizer, MosesDetokenizer, MosesSentenceSplitter
+from mosestokenizer import MosesDetokenizer
 from truecase import get_true_case
 from tqdm import tqdm
 from logging import warn
 from re import search
 from pickle import load, dump
-from fasttext import FastText, load_model
-from collections import defaultdict
+from .language import LangDetect, WordTokenizer, SentenceSplitter
 
 DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
-
-class LangDetect():
-    url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/"
-
-    def __init__(self, compress=False):
-        # fixes https://github.com/facebookresearch/fastText/issues/1067 for the time being
-        FastText.eprint = lambda _: None
-        self.model = self.load_model("lid.176.ftz" if compress else "lid.176.bin")
-
-    def load_model(self, name):
-        target_path = join(DATADIR, name)
-        if not isfile(target_path):
-            urlretrieve(join(self.url, name), target_path)
-        return load_model(target_path)
-
-    def detect(self, texts, return_score=False):
-        texts = [texts] if isinstance(texts, str) else texts
-        counter = defaultdict(float)
-
-        for text in texts:
-            labels, scores = self.model.predict(text.strip())
-            label = labels[0].removeprefix("__label__")
-            score = min(float(scores[0]), 1.0)
-            counter[label] += score
-        label, score = sorted(counter.items(), key=lambda tup: tup[1])[-1]
-        return (label, score) if return_score else label
 
 class DatasetLoader():
     def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=30):
@@ -146,9 +119,9 @@ class DatasetLoader():
 
     def cc100_iter(self, language):
         filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
-        with xopen(join(DATADIR, filename)) as f, MosesSentenceSplitter(language, False) as sent_split:
-            for line in f:
-                if len(line.strip()) == 0:
+        with xopen(join(DATADIR, filename)) as f, SentenceSplitter(language, False) as sent_split:
+            for line in map(lambda line: line.strip(), f):
+                if len(line) == 0:
                     for sentence in sent_split(lines):
                         yield sentence
                     lines.clear()
@@ -156,14 +129,13 @@ class DatasetLoader():
                     lines.append(line.decode())
 
     def filter(self, lang, sents, iterator, size, exclude):
-        langdetect = LangDetect()
-        with MosesTokenizer(lang) as tokenize, MosesSentenceSplitter(lang, False) as sent_split:
-            for sent in iterator:
+        langdetect = LangDetect(cache_dir=DATADIR)
+        with WordTokenizer(lang) as tokenize, SentenceSplitter(lang, False) as sent_split:
+            for sent in map(lambda sent: sent.strip(), iterator):
                 if len(sents) < size and all(not search(pattern, sent) for pattern in exclude) \
                 and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang \
                 and self.min_monolingual_sent_len <= len(tokenize(sent)) <= self.max_monolingual_sent_len:
-                    input(sent.strip())
-                    sents.add(sent.strip())
+                    sents.add(sent)
         return sents
 
     def load(self, name):
@@ -197,22 +169,25 @@ class DatasetLoader():
                 mpath, mfiles = DATADIR, [filename.format(version) for filename in self.monolingual_data["filenames"]]
                 if isfile(join(mpath, mfiles[0])) and isfile(join(mpath, mfiles[1])):
                     with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g:
-                        pass
                         mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
                         mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
                 elif version == self.monolingual_data["versions"][-1]:
+                    data = self.monolingual_data["fallback"]
                     if isfile(join(mpath, mfiles[0])):
                         with gopen(join(mpath, mfiles[0]), "rt") as f:
                             mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+                    else:
+                        self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
+                        mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
                     if isfile(join(mpath, mfiles[1])):
                         with gopen(join(mpath, mfiles[1]), "rt") as g:
                             mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
+                    else:
+                        self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
+                        mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
                 if min(len(mono_source), len(mono_target)) >= samples:
                     break
             else:
-                self.download(self.monolingual_data["fallback"])
-                mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
-                mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
                 if min(len(mono_source), len(mono_target)) < samples:
                     warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
             with open(cache_file, 'wb') as f:

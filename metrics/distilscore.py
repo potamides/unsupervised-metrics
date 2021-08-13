@@ -7,7 +7,8 @@ from torch.nn.functional import cosine_similarity
 from torch import from_numpy
 from .common import CommonScore
 from .utils.knn import ratio_margin_align
-from .utils.dataset import DATADIR, LangDetect
+from .utils.dataset import DATADIR
+from .utils.language import LangDetect
 from .utils.nmt import language2mBART
 from os.path import join, isfile, basename
 from nltk.metrics.distance import edit_distance
@@ -65,7 +66,7 @@ class DistilScore(CommonScore):
         # mBART also has a decoder but we are only interested in the encoder output. To make sure that
         # sentence_transformers use the encoder output we monkey patch the forward method. Don't do this at home kids.
         if "mbart" in model_name:
-            mbart, detector = word_embedding_model.auto_model, LangDetect()
+            mbart, detector = word_embedding_model.auto_model, LangDetect(cache_dir=DATADIR)
             mbart.forward = lambda **kv: type(mbart).forward(mbart, **kv)[-1:]
 
             def tokenize(text):

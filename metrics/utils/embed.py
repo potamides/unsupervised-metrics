@@ -6,7 +6,7 @@ from os.path import join, isfile
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 from gzip import open as gopen
-from mosestokenizer import MosesTokenizer
+from .language import WordTokenizer
 from .vecmap.map_embeddings import vecmap
 from .dataset import DATADIR
 
@@ -78,7 +78,7 @@ def get_embeddings_file(lang_id):
 
 def vecmap_embed(all_sents, lang_dict, lang):
     tokens, idf_weights, embeddings = list(), list(), list()
-    with MosesTokenizer(lang) as tokenize:
+    with WordTokenizer(lang) as tokenize:
         for sent in all_sents:
             tokens.append([word for word in tokenize(sent)])
             idf_weights.append([1] * len(tokens[-1]))
