@@ -8,6 +8,7 @@ from nltk.metrics.distance import edit_distance
 from numpy import loadtxt
 from functools import cached_property
 from urllib.request import urlopen
+from urllib.error import URLError
 import logging
 import torch
 
@@ -113,12 +114,16 @@ class BertRemapPretrained(BertEmbed):
     url = f"https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
     def remap(self, source_lang, target_lang):
-        if self.mapping == "CLP":
-            download = urlopen(self.url.format(source_lang, target_lang, "BAM"))
-            self.projection = torch.tensor(loadtxt(download), dtype=torch.float32)
-        else:
-            download = urlopen(self.url.format(source_lang, target_lang, "GBDD"))
-            self.projection = torch.tensor(loadtxt(download)[0], dtype=torch.float32)
+        try:
+            if self.mapping == "CLP":
+                download = urlopen(self.url.format(source_lang, target_lang, "BAM"))
+                self.projection = torch.tensor(loadtxt(download), dtype=torch.float32)
+            else:
+                download = urlopen(self.url.format(source_lang, target_lang, "GBDD"))
+                self.projection = torch.tensor(loadtxt(download)[0], dtype=torch.float32)
+        except URLError as e:
+            if e.status == 404:
+                raise ValueError("Language direction does not exist!")
 
 class VecMapEmbed(CommonScore):
     def __init__(self, device, src_lang, tgt_lang, batch_size):

@@ -28,11 +28,16 @@ def xmoverscore_tests(source_lang, target_lang, dataset_name, mapping="UMD"):
     eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), [f"XMoverScore ({mapping})"]
 
-    scorer.remap(source_lang, target_lang)
-    pearson, spearman = scorer.correlation(eval_src, eval_system, eval_scores)
-    logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
-    results["pearson"].append(round(100 * pearson, 2))
-    results["spearman"].append(round(100 * spearman, 2))
+    try:
+        scorer.remap(source_lang, target_lang)
+    except ValueError:
+        results["pearson"].append("-")
+        results["spearman"].append("-")
+    else:
+        pearson, spearman = scorer.correlation(eval_src, eval_system, eval_scores)
+        logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
+        results["pearson"].append(round(100 * pearson, 2))
+        results["spearman"].append(round(100 * spearman, 2))
 
     return tabulate(results, headers="keys", showindex=index)
 
