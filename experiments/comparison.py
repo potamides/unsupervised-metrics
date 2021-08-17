@@ -11,7 +11,8 @@ from tabulate import tabulate
 from numpy import corrcoef, argsort
 import logging
 
-newstest = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
+newstest2016 = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
+newstest2017 = [('cs', 'en'), ('de', 'en'), ('fi', 'en'), ('lv', 'en'), ('ru', 'en'), ('tr', 'en'), ('zh', 'en')]
 mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
 
 remap_iterations = 1
@@ -116,7 +117,8 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-for dataset, identifier, pairs in (("Newstest-2016", "scored", newstest), ("MLQE-PE", "scored-mlqe", mlqpe)):
+datasets = (("Newstest-2016", "scored", newstest2016), ("Newstest-2017", "scored-wmt17", newstest2017), ("MLQE-PE", "scored-mlqe", mlqpe))
+for dataset, identifier, pairs in datasets:
     for source_lang, target_lang in pairs:
         print(f"Evaluating {source_lang}-{target_lang} language direction on {dataset}")
         print(self_learning_tests(source_lang, target_lang, identifier, max_len=30))

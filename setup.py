@@ -27,7 +27,6 @@ setup(name='unsupervised-metrics',
         "simalign @ https://github.com/cisnlp/simalign/archive/refs/tags/v0.2.zip",
         "PuLP==2.4",
         "bert-score==0.3.9",
-        "truecase==0.0.12",
         "tabulate==0.8.9"
     ],
     python_requires=">=3.9.0",
