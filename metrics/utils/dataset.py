@@ -119,7 +119,7 @@ class DatasetLoader():
 
     def cc100_iter(self, language):
         filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
-        with xopen(join(DATADIR, filename)) as f, SentenceSplitter(language, False) as sent_split:
+        with xopen(join(DATADIR, filename)) as f, SentenceSplitter(language) as sent_split:
             for line in map(lambda line: line.strip(), f):
                 if len(line) == 0:
                     for sentence in sent_split(lines):
@@ -130,7 +130,7 @@ class DatasetLoader():
 
     def filter(self, lang, sents, iterator, size, exclude):
         langdetect = LangDetect(cache_dir=DATADIR)
-        with WordTokenizer(lang) as tokenize, SentenceSplitter(lang, False) as sent_split:
+        with WordTokenizer(lang) as tokenize, SentenceSplitter(lang) as sent_split:
             for sent in map(lambda sent: sent.strip(), iterator):
                 if len(sents) < size and all(not search(pattern, sent) for pattern in exclude) \
                 and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang \

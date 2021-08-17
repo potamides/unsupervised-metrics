@@ -45,6 +45,5 @@ def contrastive_tests(max_len=30, model="xlm-roberta-base"):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-print("Contrastive learning with XLM-R", contrastive_tests(max_len=30), sep="\n")
-print(contrastive_tests(max_len=50))
+print("Contrastive learning with XLM-R", contrastive_tests(max_len=30), contrastive_tests(max_len=50), sep="\n")
 print("Contrastive learning with mBERT", contrastive_tests(max_len=30, model="bert-base-multilingual-cased"), sep="\n")

@@ -56,7 +56,7 @@ class ContrastScore(CommonScore):
         parallelize= False,
         train_batch_size=256,
         max_seq_length=None,
-        num_epochs=10,
+        num_epochs=1,
         knn_batch_size = 1000000,
         mine_batch_size = 5000000,
         train_size = 100000,

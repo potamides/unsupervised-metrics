@@ -1,12 +1,12 @@
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelWithLMHead, AutoTokenizer
 from torch import tensor
 
 def lm_perplexity(hyps, device, name="gpt2"):
     # Some models need a special tokenizer, like chinese gpt2, see here:
     # https://huggingface.co/ckiplab/gpt2-base-chinese
-    model_name, tokenizer_name = name, name if isinstance(name, str) else name
+    model_name, tokenizer_name = (name, name) if isinstance(name, str) else name
 
-    model = AutoModel.from_pretrained(model_name).to(device)
+    model = AutoModelWithLMHead.from_pretrained(model_name).to(device)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     scores = list()
