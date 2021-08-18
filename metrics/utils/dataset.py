@@ -10,8 +10,6 @@ from urllib.request import urlretrieve
 from urllib.error import URLError
 from pathlib import Path
 from io import TextIOWrapper
-from mosestokenizer import MosesDetokenizer
-from truecase import get_true_case
 from tqdm import tqdm
 from logging import warn
 from re import search
