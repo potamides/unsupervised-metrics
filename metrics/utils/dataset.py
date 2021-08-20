@@ -14,6 +14,7 @@ from tqdm import tqdm
 from logging import warn
 from re import search
 from pickle import load, dump
+from gdown import cached_download
 from linecache import getline
 from .language import LangDetect, WordTokenizer, SentenceSplitter
 
@@ -98,6 +99,19 @@ class DatasetLoader():
             "member": f"{self.source_lang}-{self.target_lang}/test20.{self.source_lang}{self.target_lang}.df.short.tsv",
             "samples": 1000,
         }
+    @property
+    def mqm_eval_data(self):
+        return {
+            "filenames": (
+                "newstest2020txt-v2.tar.gz",
+                f"mqm_newstest2020_{self.source_lang+self.target_lang}.avg_seg_scores.tsv"
+            ),
+            "urls": (
+                "https://drive.google.com/uc?id=1P-Y1P-GTMCNtWj8qaeq-U-m-0DGGnOaP",
+                f"https://github.com/google/wmt-mqm-human-evaluation/raw/main/{self.source_lang+self.target_lang}"
+            ),
+            "samples": 20000 if self.source_lang == "zh" else 14180,
+        }
 
     def download(self, dataset, version=None):
         if "filename" in dataset and "url" in dataset:
@@ -114,13 +128,15 @@ class DatasetLoader():
                     self.pbar.total = tsize
                 return self.pbar.update(b * bsize - self.pbar.n)
 
-            if not isfile(join(DATADIR, filename)):
+            if not isfile(join(DATADIR, filename)) and "drive.google.com" not in url:
                 try:
                     urlretrieve(join(url, filename), join(DATADIR, filename), progress)
                     del self.pbar
                 except URLError as e:
                     if e.status != 404:
                         raise
+            else:
+                cached_download(url, join(DATADIR, filename))
 
     def cc100_iter(self, language):
         filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
@@ -214,12 +230,11 @@ class DatasetLoader():
             self.download(self.wmt17_eval_data)
             wmt_submitted, wmt_metrics = [join(DATADIR, name) for name in self.wmt17_eval_data["filenames"]]
             with topen(wmt_submitted, 'r:gz') as tf:
-                members = [join('wmt17-submitted-data/txt', folder) for folder in ["references", "sources", "system-outputs"]]
+                members = [join('wmt17-submitted-data/txt', folder) for folder in ["sources", "system-outputs"]]
                 tf.extractall(DATADIR, [tarinfo for tarinfo in tf.getmembers() if tarinfo.name.startswith(tuple(members))])
             with topen(wmt_metrics, 'r:gz') as tf:
                 tf.extract("./manual-evaluation/DA-seglevel.csv", DATADIR)
             with open(join(DATADIR, "manual-evaluation/DA-seglevel.csv"), "rb") as f:
-                eval_source, eval_system, eval_scores = list(), list(), list()
                 for line in f.readlines()[1:]:
                     lp, _, system, sid, human = line.decode().split()
                     src, tgt = lp.split("-")
@@ -245,6 +260,27 @@ class DatasetLoader():
                         eval_system.append(hypotheses[0])
                         eval_scores.append(score)
                 assert len(eval_scores) == len(eval_system) == len(eval_scores) == self.wmt17_eval_data['samples']
+        elif name.endswith("mqm"):
+            self.download(self.mqm_eval_data)
+            wmt_submitted, mqm_file = [join(DATADIR, name) for name in self.mqm_eval_data["filenames"]]
+            with topen(wmt_submitted, 'r:gz') as tf:
+                members = [join('txt', folder) for folder in ["sources", "system-outputs"]]
+                tf.extractall(DATADIR, [tarinfo for tarinfo in tf.getmembers() if tarinfo.name.startswith(tuple(members))])
+            with open(mqm_file, "rb") as f:
+                for line in f.readlines()[1:]:
+                    system, mqm_avg_score, seg_id = line.decode().split()
+                    seg_id, src, tgt = int(seg_id), self.source_lang, self.target_lang
+
+                    source_file = join(DATADIR, f"txt/sources/newstest2020-{self.source_lang}{tgt}-src.{src}.txt")
+                    hyp_file = join(DATADIR, f"txt/system-outputs/{src}-{tgt}/newstest2020.{src}-{tgt}.{system}.txt")
+                    source = getline(source_file, seg_id).strip()
+                    hypothesis = getline(hyp_file, seg_id).strip()
+
+                    assert source and hypothesis
+                    eval_source.append(source)
+                    eval_system.append(hypothesis)
+                    eval_scores.append(float(mqm_avg_score))
+                assert len(eval_scores) == len(eval_system) == len(eval_scores) == self.mqm_eval_data['samples']
         else:
             self.download(self.wmt16_eval_data)
             samples, members = self.wmt16_eval_data["samples"], self.wmt16_eval_data["members"]
@@ -260,7 +296,7 @@ class DatasetLoader():
             return self.load_parallel(name)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name)
-        elif name in ["scored", "scored-mlqe", "scored-wmt17"]:
+        elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm"]:
             return self.load_scored(name)
         else:
             raise ValueError(f"{name} is not a valid type!")
