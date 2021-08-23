@@ -14,10 +14,11 @@ import logging
 newstest2016 = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
 newstest2017 = [('cs', 'en'), ('de', 'en'), ('fi', 'en'), ('lv', 'en'), ('ru', 'en'), ('tr', 'en'), ('zh', 'en')]
 mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
+mqm = [("en", "de"), ("zh", "en")]
 
 remap_iterations = 1
 nmt_iterations = 1
-contrast_iterations = 2
+contrast_iterations = 6
 
 def correlation(model_scores, ref_scores):
     ref_ranks, ranks = argsort(ref_scores).argsort(), argsort(model_scores).argsort()
@@ -109,7 +110,7 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
 
     logging.info("Evaluating XMoverScore + ContrastScore")
     wmd_scores, contrast_scores = xmover.score(eval_src, eval_system), contrast.score(eval_src, eval_system)
-    pearson, spearman = correlation([0.8 * x + 0.2 * y for x, y in zip(wmd_scores, contrast_scores)], eval_scores)
+    pearson, spearman = correlation([0.6 * x + 0.4 * y for x, y in zip(wmd_scores, contrast_scores)], eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
@@ -117,7 +118,8 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-datasets = (("Newstest-2016", "scored", newstest2016), ("Newstest-2017", "scored-wmt17", newstest2017), ("MLQE-PE", "scored-mlqe", mlqpe))
+datasets = (("Newstest-2016", "scored", newstest2016), ("Newstest-2017", "scored-wmt17", newstest2017),
+        ("MLQE-PE", "scored-mlqe", mlqpe), ("MQM-Newstest-2020", "scored-mqm", mqm))
 for dataset, identifier, pairs in datasets:
     for source_lang, target_lang in pairs:
         print(f"Evaluating {source_lang}-{target_lang} language direction on {dataset}")

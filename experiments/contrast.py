@@ -6,7 +6,7 @@ from metrics.utils.dataset import DatasetLoader
 import logging
 
 source_lang, target_lang = "de", "en"
-iterations = 5
+iterations = 10
 
 def contrastive_tests(max_len=30, model="xlm-roberta-base"):
     scorer = ContrastScore(model_name=model, source_language=source_lang, target_language=target_lang, parallelize=True)

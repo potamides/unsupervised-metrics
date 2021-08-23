@@ -13,7 +13,7 @@ import logging
 source_lang, target_lang = "de", "en"
 remap_iterations = 1
 nmt_iterations = 1
-contrast_iterations = 2
+contrast_iterations = 6
 
 def error(model_scores, ref_scores):
     rmse = mse_loss(FloatTensor(ref_scores), FloatTensor(model_scores)).sqrt().item()
