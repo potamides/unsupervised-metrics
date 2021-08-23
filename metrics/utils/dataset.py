@@ -18,7 +18,7 @@ from gdown import cached_download
 from linecache import getline
 from .language import LangDetect, WordTokenizer, SentenceSplitter
 
-DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "xmoverscore"))
+DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "metrics"))
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
 
 class DatasetLoader():
