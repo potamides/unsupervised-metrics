@@ -79,7 +79,7 @@ class DatasetLoader():
             )
         }
     @property
-    def wmt17_eval_data(_):
+    def wmt17_eval_data(self):
         return {
             "filenames": (
                 "wmt17-submitted-data-v1.0.tgz",
@@ -89,7 +89,7 @@ class DatasetLoader():
                 "http://data.statmt.org/wmt17/translation-task/",
                 "http://ufallab.ms.mff.cuni.cz/~bojar/"
             ),
-            "samples": 560,
+            "samples": 560 if self.source_lang != "zh" else 535
         }
     @property
     def mlqe_eval_data(self):
@@ -135,7 +135,7 @@ class DatasetLoader():
                 except URLError as e:
                     if e.status != 404:
                         raise
-            else:
+            elif not isfile(join(DATADIR, filename)):
                 cached_download(url, join(DATADIR, filename))
 
     def cc100_iter(self, language):
@@ -240,7 +240,15 @@ class DatasetLoader():
                     src, tgt = lp.split("-")
                     systems = system.split("+")
                     index = int(sid)
-                    score = human
+                    score = float(human)
+
+                    if "ROCMT.5167" in systems: # doesn't seem to exist for zh-en
+                        if len(systems) == 1:
+                            continue
+                        else:
+                            systems.remove("ROCMT.5167")
+                    if "CASICT-cons.5144" in systems: # there seem to be some typos for zh-en
+                        systems[systems.index("CASICT-cons.5144")] = "CASICT-DCU-NMT.5144"
 
                     if src == self.source_lang and tgt == self.target_lang:
                         path = join(DATADIR, "wmt17-submitted-data/txt")
@@ -254,7 +262,7 @@ class DatasetLoader():
                             hypothesis = getline(hyp_file, index).strip()
                             hypotheses.append(hypothesis)
 
-                        assert min(len(source), len(hypotheses)) > 0 and len(set(hypotheses)) == 1
+                        assert min(len(source), len(hypotheses[0])) > 0 and len(set(hypotheses)) == 1
 
                         eval_source.append(source)
                         eval_system.append(hypotheses[0])
@@ -271,7 +279,7 @@ class DatasetLoader():
                     system, mqm_avg_score, seg_id = line.decode().split()
                     seg_id, src, tgt = int(seg_id), self.source_lang, self.target_lang
 
-                    source_file = join(DATADIR, f"txt/sources/newstest2020-{self.source_lang}{tgt}-src.{src}.txt")
+                    source_file = join(DATADIR, f"txt/sources/newstest2020-{src}{tgt}-src.{src}.txt")
                     hyp_file = join(DATADIR, f"txt/system-outputs/{src}-{tgt}/newstest2020.{src}-{tgt}.{system}.txt")
                     source = getline(source_file, seg_id).strip()
                     hypothesis = getline(hyp_file, seg_id).strip()
