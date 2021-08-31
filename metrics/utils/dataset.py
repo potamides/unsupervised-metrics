@@ -22,11 +22,27 @@ DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(),
 Path(DATADIR).mkdir(parents=True, exist_ok=True)
 
 class DatasetLoader():
-    def __init__(self, source_language, target_language, min_monolingual_sent_len=3, max_monolingual_sent_len=30):
+    def __init__(self, source_language, target_language,
+            min_monolingual_sent_len=3, max_monolingual_sent_len=30,
+            hard_limit=1000):
+        """
+        Initialize a dataloader for a given source and target language.
+
+        Keyword arguments:
+        min_monolingual_sent_len -- minimum amount of tokens in a sentence
+            (sentences are tokenized based on language specific tokenizers)
+        max_monolingual_sent_len -- maximum amount of tokens in a sentence
+            (sentences are tokenized based on language specific tokenizers)
+        hard_limit -- maximum allowed amount of characters in a sentence string
+            (tokenizers sometimes tokenize very long garbage strings into few
+            tokens which can lead to oom errors during training when not
+            filtered out)
+        """
         self.source_lang = source_language
         self.target_lang = target_language
         self.min_monolingual_sent_len = min_monolingual_sent_len
         self.max_monolingual_sent_len = max_monolingual_sent_len
+        self.hard_limit = hard_limit
 
     @property
     def monolingual_data(self):
@@ -154,7 +170,7 @@ class DatasetLoader():
         with WordTokenizer(lang) as tokenize, SentenceSplitter(lang) as sent_split:
             for sent in map(lambda sent: sent.strip(), iterator):
                 if len(sents) < size and all(not search(pattern, sent) for pattern in exclude) \
-                and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang \
+                and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang and len(sent) <= self.hard_limit \
                 and self.min_monolingual_sent_len <= len(tokenize(sent)) <= self.max_monolingual_sent_len:
                     sents.add(sent)
         return sents
