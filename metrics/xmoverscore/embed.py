@@ -5,7 +5,8 @@ from ..utils.dataset import DATADIR
 from ..common import CommonScore
 from os.path import isfile, join
 from nltk.metrics.distance import edit_distance
-from numpy import loadtxt
+from numpy import load
+from io import BytesIO
 from functools import cached_property
 from urllib.request import urlopen
 from urllib.error import URLError
@@ -109,21 +110,25 @@ class BertRemapPretrained(BertEmbed):
     Obtains pretrained remapping matrices from original XMoverScore repository.
     """
 
-    commit = "40e4d2b0d78411ec617c7e73c4fbe278a1a1f7e8"
-    path = "mapping/europarl-v7.{}-{}.2k.12.{}.map"
+    commit = "b37762cdfd0e0f987fb8c39a6a82a07b96d9d682"
+    path = "mapping/layer-12/{}.{}-{}.2k.12.{}"
     url = f"https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
     def remap(self, source_lang, target_lang):
-        try:
-            if self.mapping == "CLP":
-                download = urlopen(self.url.format(source_lang, target_lang, "BAM"))
-                self.projection = torch.tensor(loadtxt(download), dtype=torch.float32)
-            else:
-                download = urlopen(self.url.format(source_lang, target_lang, "GBDD"))
-                self.projection = torch.tensor(loadtxt(download)[0], dtype=torch.float32)
-        except URLError as e:
-            if e.status == 404:
-                raise ValueError("Language direction does not exist!")
+        for corpus in ["europarl-v7", "flores-v1", "un-v1"]:
+            try:
+                if self.mapping == "CLP":
+                    download = urlopen(self.url.format(corpus, source_lang, target_lang, "BAM")).read()
+                    self.projection = torch.tensor(load(BytesIO(download)), dtype=torch.float32)
+                else:
+                    download = urlopen(self.url.format(corpus, source_lang, target_lang, "GBDD")).read()
+                    self.projection = torch.tensor(load(BytesIO(download))[0], dtype=torch.float32)
+                break
+            except URLError as e:
+                if e.status == 404:
+                    pass
+        else:
+            raise ValueError("Language direction does not exist!")
 
 class VecMapEmbed(CommonScore):
     def __init__(self, device, src_lang, tgt_lang, batch_size):
