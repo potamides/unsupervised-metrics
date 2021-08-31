@@ -6,8 +6,6 @@ from metrics.sentsim import SentSim
 from metrics.utils.dataset import DatasetLoader
 from collections import defaultdict
 from tabulate import tabulate
-from collections import defaultdict
-from tabulate import tabulate
 from numpy import corrcoef, argsort
 import logging
 
@@ -15,6 +13,9 @@ newstest2016 = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "
 newstest2017 = [('cs', 'en'), ('de', 'en'), ('fi', 'en'), ('lv', 'en'), ('ru', 'en'), ('tr', 'en'), ('zh', 'en')]
 mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
 mqm = [("en", "de"), ("zh", "en")]
+
+lm_model = {"en": "gpt2", "ru": "sberbank-ai/rugpt3small_based_on_gpt2", "de": "dbmdz/german-gpt2",
+        "zh": "uer/gpt2-chinese-cluecorpussmall"}
 
 remap_iterations = 1
 nmt_iterations = 1
@@ -25,7 +26,7 @@ def correlation(model_scores, ref_scores):
     return corrcoef(ref_scores, model_scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
 
 def xmoverscore_tests(source_lang, target_lang, dataset_name, mapping="UMD"):
-    scorer = XMoverScore(mapping=mapping, use_lm=target_lang=="en")
+    scorer = XMoverScore(mapping=mapping, use_lm=True, lm_model_name=lm_model[target_lang])
     dataset = DatasetLoader(source_lang, target_lang)
     eval_src, eval_system, eval_scores = dataset.load(dataset_name)
     results, index = defaultdict(list), [f"XMoverScore ({mapping})"]
@@ -71,8 +72,6 @@ def distilscore_tests(source_lang, target_lang, dataset_name):
     return tabulate(results, headers="keys", showindex=index)
 
 def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
-    lm_model = {"en": "gpt2", "ru": "sberbank-ai/rugpt3small_based_on_gpt2", "de": "dbmdz/german-gpt2",
-            "zh": "uer/gpt2-chinese-cluecorpussmall"}
     xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1],
             nmt_weights=[0.5, 0.4], use_lm=True, lm_model_name=lm_model[target_lang])
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
