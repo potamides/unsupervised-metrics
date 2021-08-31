@@ -8,6 +8,7 @@ from math import ceil
 from .utils.knn import ratio_margin_align
 from .common import CommonScore
 from .utils.dataset import DATADIR
+from .utils.wmd import word_mover_score
 from nltk.metrics.distance import edit_distance
 from pathlib import Path
 import logging
@@ -169,3 +170,32 @@ class ContrastScore(CommonScore):
             new_model.save(self.path)
 
         self.model = SentenceTransformer(self.path, device=self.device)
+
+class XLMoverScore(ContrastScore):
+    """
+    n_gram        - n-gram size of word mover's distance
+    suffix_filter - filter embeddings of word suffixes (original XLMoverScore
+        does this, but it doesn't make sense for SentencePiece-based Models)
+    """
+    def __init__(self, n_gram=1, suffix_filter=False, **kwargs):
+        super().__init__(**kwargs)
+        self.n_gram = n_gram
+        self.suffix_filter = suffix_filter
+
+    #Override
+    def score(self, source_sents, target_sents):
+        embedding_model = self.model[0]
+        tokenizer = self.model.tokenizer
+
+        src_inputs = tokenizer(source_sents, padding=True, truncation=True, return_tensors="pt")
+        src_idf = src_inputs['attention_mask'].float()
+        src_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in source_sents]
+        src_embeddings = embedding_model(**src_inputs)['last_hidden_state']
+
+        tgt_inputs = tokenizer(target_sents, padding=True, truncation=True, return_tensors="pt").values()
+        tgt_idf = tgt_inputs['attention_mask'].float()
+        tgt_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in target_sents]
+        tgt_embeddings = embedding_model(**tgt_inputs)['last_hidden_state']
+
+        return word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
+                self.n_gram, True, self.suffix_filter)

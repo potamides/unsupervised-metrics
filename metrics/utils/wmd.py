@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn.functional import cosine_similarity
 import string
 from pyemd import emd
 
@@ -21,10 +22,10 @@ def slide_window(input_, w=3, o=1):
 def _safe_divide(numerator, denominator):
     return numerator / (denominator + 1e-30)
 
-def load_ngram(tokens, embedding, idf, n_gram):
+def load_ngram(tokens, embedding, idf, n_gram, suffix_filter=True):
     new_a = []
     new_idf = []
-    ids = [k for k, w in enumerate(tokens) if w not in set(string.punctuation) and '##' not in w]
+    ids = [k for k, w in enumerate(tokens) if not suffix_filter or (w not in set(string.punctuation) and '##' not in w)]
 
     slide_wins = slide_window(np.array(ids), w=n_gram)
     for slide_win in slide_wins:
@@ -35,10 +36,13 @@ def load_ngram(tokens, embedding, idf, n_gram):
     new_a = torch.stack(new_a, 0)
     return new_a, new_idf
 
-def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams):
+def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams, use_cosine=False):
     embeddings = torch.cat([src_embedding_ngrams, tgt_embedding_ngrams], 0)
     embeddings.div_(torch.norm(embeddings, dim=-1).unsqueeze(-1) + 1e-30)
-    distance_matrix = pairwise_distances(embeddings, embeddings)
+    if use_cosine:
+        distance_matrix = cosine_similarity(embeddings[:, None, :], embeddings[None, :, :], dim=2)
+    else:
+        distance_matrix = pairwise_distances(embeddings, embeddings)
 
     c1 = np.zeros(len(src_idf_ngrams) + len(tgt_idf_ngrams))
     c2 = np.zeros_like(c1)
@@ -48,16 +52,16 @@ def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tg
 
     return -emd(_safe_divide(c1, np.sum(c1)), _safe_divide(c2, np.sum(c2)), distance_matrix.double().numpy())
 
-def word_mover_align(source_data, target_data, n_gram, candidates=None):
+def word_mover_align(source_data, target_data, n_gram, candidates=None, use_cosine=False, suffix_filter=True):
     src_embedding_ngrams, src_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*source_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, suffix_filter)
         src_embedding_ngrams.append(embedding_ngrams)
         src_idf_ngrams.append(idf_ngrams)
 
     tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*target_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, suffix_filter)
         tgt_embedding_ngrams.append(embedding_ngrams)
         tgt_idf_ngrams.append(idf_ngrams)
 
@@ -72,7 +76,7 @@ def word_mover_align(source_data, target_data, n_gram, candidates=None):
             batch_tgt_embedding_ngrams = tgt_embedding_ngrams[tgt_index]
             batch_tgt_idf_ngrams = tgt_idf_ngrams[tgt_index]
             score = compute_score(batch_src_embedding_ngrams, batch_src_idf_ngrams,
-                    batch_tgt_embedding_ngrams, batch_tgt_idf_ngrams)
+                    batch_tgt_embedding_ngrams, batch_tgt_idf_ngrams, use_cosine)
             if score > best_score:
                 best_score = score
                 best_tgt_index = tgt_index
@@ -82,21 +86,21 @@ def word_mover_align(source_data, target_data, n_gram, candidates=None):
 
     return pairs, scores
 
-def word_mover_score(source_data, target_data, n_gram):
+def word_mover_score(source_data, target_data, n_gram, use_cosine=False, suffix_filter=True):
     src_embedding_ngrams, src_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*source_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, suffix_filter)
         src_embedding_ngrams.append(embedding_ngrams)
         src_idf_ngrams.append(idf_ngrams)
 
     tgt_embedding_ngrams, tgt_idf_ngrams = list(), list()
     for embedding, idf, tokens in zip(*target_data):
-        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram)
+        embedding_ngrams, idf_ngrams = load_ngram(tokens, embedding, idf, n_gram, suffix_filter)
         tgt_embedding_ngrams.append(embedding_ngrams)
         tgt_idf_ngrams.append(idf_ngrams)
 
     scores = list()
     for data in zip(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tgt_idf_ngrams):
-        scores.append(compute_score(*data))
+        scores.append(compute_score(*data, use_cosine))
 
     return scores
