@@ -40,7 +40,7 @@ def compute_score(src_embedding_ngrams, src_idf_ngrams, tgt_embedding_ngrams, tg
     embeddings = torch.cat([src_embedding_ngrams, tgt_embedding_ngrams], 0)
     embeddings.div_(torch.norm(embeddings, dim=-1).unsqueeze(-1) + 1e-30)
     if use_cosine:
-        distance_matrix = cosine_similarity(embeddings[:, None, :], embeddings[None, :, :], dim=2)
+        distance_matrix = 1 - cosine_similarity(embeddings[:, None, :], embeddings[None, :, :], dim=2)
     else:
         distance_matrix = pairwise_distances(embeddings, embeddings)
 

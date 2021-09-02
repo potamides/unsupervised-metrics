@@ -9,6 +9,7 @@ from .utils.knn import ratio_margin_align
 from .common import CommonScore
 from .utils.dataset import DATADIR
 from .utils.wmd import word_mover_score
+from .utils.perplexity import lm_perplexity
 from nltk.metrics.distance import edit_distance
 from pathlib import Path
 import logging
@@ -172,30 +173,60 @@ class ContrastScore(CommonScore):
         self.model = SentenceTransformer(self.path, device=self.device)
 
 class XLMoverScore(ContrastScore):
-    """
-    n_gram        - n-gram size of word mover's distance
-    suffix_filter - filter embeddings of word suffixes (original XLMoverScore
-        does this, but it doesn't make sense for SentencePiece-based Models)
-    """
-    def __init__(self, n_gram=1, suffix_filter=False, **kwargs):
+    def __init__(
+            self,
+            embed_batch_size = 128,
+            n_gram=1,
+            suffix_filter=False,
+            lm_model_name="gpt2",
+            use_lm=False,
+            lm_weights=[0.9, 0.1],
+            **kwargs
+        ):
+        """
+        embed_batch_size - batch size for embedding sentences during inference
+        n_gram           - n-gram size of word mover's distance
+        suffix_filter    - filter embeddings of word suffixes (original XLMoverScore
+            does this, but it doesn't make sense for SentencePiece-based Models)
+        """
         super().__init__(**kwargs)
+        self.embed_batch_size = embed_batch_size
         self.n_gram = n_gram
         self.suffix_filter = suffix_filter
+        self.lm_model_name = lm_model_name
+        self.use_lm = use_lm
+        self.lm_weights = lm_weights
 
     #Override
     def score(self, source_sents, target_sents):
-        embedding_model = self.model[0]
+        embedding_model = self.model.eval().to(self.device)[0].auto_model
         tokenizer = self.model.tokenizer
 
-        src_inputs = tokenizer(source_sents, padding=True, truncation=True, return_tensors="pt")
-        src_idf = src_inputs['attention_mask'].float()
-        src_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in source_sents]
-        src_embeddings = embedding_model(**src_inputs)['last_hidden_state']
+        with torch.no_grad():
+            src_ids, src_mask = tokenizer(source_sents, padding=True, truncation=True, return_tensors="pt").values()
+            src_idf = src_mask.float()
+            src_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in source_sents]
+            src_embeddings = list()
 
-        tgt_inputs = tokenizer(target_sents, padding=True, truncation=True, return_tensors="pt").values()
-        tgt_idf = tgt_inputs['attention_mask'].float()
-        tgt_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in target_sents]
-        tgt_embeddings = embedding_model(**tgt_inputs)['last_hidden_state']
+            tgt_ids, tgt_mask = tokenizer(target_sents, padding=True, truncation=True, return_tensors="pt").values()
+            tgt_idf = tgt_mask.float()
+            tgt_tokens = [[tokenizer.cls_token, *tokenizer.tokenize(sent), tokenizer.sep_token] for sent in target_sents]
+            tgt_embeddings = list()
 
-        return word_mover_score((src_embeddings, src_idf, src_tokens), (tgt_embeddings, tgt_idf, tgt_tokens),
+            for index in range(0, len(source_sents), self.embed_batch_size):
+                batch_src_ids = src_ids[index: index + self.embed_batch_size].to(self.device)
+                batch_src_mask = src_mask[index: index + self.embed_batch_size].to(self.device)
+                src_embeddings.extend(embedding_model(input_ids=batch_src_ids, attention_mask=batch_src_mask)['last_hidden_state'].cpu())
+
+                batch_tgt_ids = tgt_ids[index: index + self.embed_batch_size].to(self.device)
+                batch_tgt_mask = tgt_mask[index: index + self.embed_batch_size].to(self.device)
+                tgt_embeddings.extend(embedding_model(input_ids=batch_tgt_ids, attention_mask=batch_tgt_mask)['last_hidden_state'].cpu())
+
+        wmd_scores = word_mover_score((torch.stack(src_embeddings), src_idf, src_tokens), (torch.stack(tgt_embeddings), tgt_idf, tgt_tokens),
                 self.n_gram, True, self.suffix_filter)
+
+        if self.use_lm:
+            lm_scores = lm_perplexity(target_sents, self.device, self.lm_model_name)
+            return (self.lm_weights[0] * torch.tensor(wmd_scores) + self.lm_weights[1] * torch.tensor(lm_scores)).tolist()
+        else:
+            return wmd_scores
