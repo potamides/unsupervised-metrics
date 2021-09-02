@@ -124,7 +124,7 @@ class DistilScore(CommonScore):
                         break
         return file_path
 
-    def train(self, source_sents, target_sents, dev_source_sents=None, dev_target_sents=None, unaligned=True, overwrite=True):
+    def train(self, source_sents, target_sents, dev_source_sents=None, dev_target_sents=None, aligned=False, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
             # Train a new model to avoid overfitting
             new_model = self.load_student(self.student_model_name)
@@ -136,12 +136,12 @@ class DistilScore(CommonScore):
             if self.target_language == "en": # since teacher embeds source sentences make sure they are in english
                 source_sents, target_sents = target_sents, source_sents
 
-            if unaligned:
-                train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
-                        max_sentences=self.train_size, max_sentence_length=None)
-            else:
+            if aligned:
                 train_data.add_dataset(zip(source_sents, target_sents), max_sentences=self.train_size,
                         max_sentence_length=None)
+            else:
+                train_data.load_data(self.mine(source_sents, target_sents, overwrite=overwrite),
+                        max_sentences=self.train_size, max_sentence_length=None)
 
             train_dataloader = DataLoader(train_data, shuffle=True, batch_size=self.train_batch_size)
             train_loss = losses.MSELoss(model=new_model)

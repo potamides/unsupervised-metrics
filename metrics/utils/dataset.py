@@ -80,7 +80,7 @@ class DatasetLoader():
                 "http://data.statmt.org/news-commentary/v15/training",
                 "http://data.statmt.org/news-commentary/v15/training"
             ),
-            "samples": (10000, 40000),
+            "samples": (10000, 40000, 100000),
         }
     @property
     def wmt16_eval_data(self):
@@ -181,13 +181,15 @@ class DatasetLoader():
         index = 0 if isfile(join(DATADIR, self.parallel_data["filenames"][0])) else 1
         with gopen(join(DATADIR, self.parallel_data["filenames"][index]), 'rt') as tsvfile:
             start = self.parallel_data["samples"][0] if name.endswith("align") else 0
-            samples = self.parallel_data["samples"][1 if name.endswith("align") else 0]
+            samples = self.parallel_data["samples"][{"": 0, "align": 1, "train": 2}[name.partition("-")[2]]]
             for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), start, None):
                 if src.strip() and tgt.strip():
                     parallel_source.append(src if index == 0 else tgt)
                     parallel_target.append(tgt if index == 0 else src)
                 if len(parallel_source) >= samples:
                     break
+            else:
+                warn(f"Only obtained {len(parallel_source)} sentence pairs.")
         return parallel_source, parallel_target
 
     def load_monolingual(self, name):
@@ -316,7 +318,7 @@ class DatasetLoader():
         return eval_source, eval_system, eval_scores
 
     def load(self, name):
-        if name in ["parallel", "parallel-align"]:
+        if name in ["parallel", "parallel-align", "parallel-train"]:
             return self.load_parallel(name)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name)

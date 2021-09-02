@@ -141,10 +141,13 @@ class ContrastScore(CommonScore):
                 sents.append(line.decode().strip().split("\t"))
             return sents
 
-    def train(self, source_sents, target_sents, overwrite=True):
+    def train(self, source_sents, target_sents, aligned=False, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
             # Convert train sentences to sentence pairs
-            train_data = [InputExample(texts=[s, t]) for s, t in self.mine(source_sents, target_sents, self.train_size,
+            if aligned:
+                train_data = [InputExample(texts=[s, t]) for s, t in zip(source_sents, target_sents)]
+            else:
+                train_data = [InputExample(texts=[s, t]) for s, t in self.mine(source_sents, target_sents, self.train_size,
                     overwrite=overwrite)]
 
             # DataLoader to batch your data
