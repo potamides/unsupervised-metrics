@@ -17,7 +17,6 @@ setup(name='unsupervised-metrics',
         "sentence-transformers==1.2.0",
         "transformers==4.5.1",
         "datasets==1.6.1",
-        "cupy-cuda100==8.5.0",
         "nltk>=3.4.5",
         "sentencepiece==0.1.95",
         "mosestokenizer==1.1.0",
@@ -30,6 +29,9 @@ setup(name='unsupervised-metrics',
         "tabulate==0.8.9",
         "gdown==3.13.0"
     ],
+    extras_require={
+        "vecmap-cuda": ["cupy"],
+    },
     python_requires=">=3.9.0",
     zip_safe=False,
 )

@@ -7,7 +7,7 @@ from torch.nn.functional import cosine_similarity
 from torch import from_numpy
 from .common import CommonScore
 from .utils.knn import ratio_margin_align
-from .utils.dataset import DATADIR
+from .utils.env import DATADIR
 from .utils.language import LangDetect
 from .utils.nmt import language2mBART
 from os.path import join, isfile, basename

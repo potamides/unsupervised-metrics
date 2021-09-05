@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 from csv import reader, QUOTE_NONE
 from itertools import islice
-from os import getenv, makedirs
+from os import makedirs
 from os.path import isfile, join, dirname
 from gzip import open as gopen
 from lzma import open as xopen
 from tarfile import open as topen
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, urlopen
 from urllib.error import URLError
-from pathlib import Path
 from io import TextIOWrapper
 from tqdm import tqdm
 from logging import warn
@@ -17,9 +16,8 @@ from pickle import load, dump
 from gdown import cached_download
 from linecache import getline
 from .language import LangDetect, WordTokenizer, SentenceSplitter
-
-DATADIR = getenv("METRICS_HOME", join(getenv("XDG_CACHE_HOME", join(Path.home(), ".cache")), "metrics"))
-Path(DATADIR).mkdir(parents=True, exist_ok=True)
+from .env import DATADIR
+from numpy import nan, nanmean, nanstd, empty
 
 class DatasetLoader():
     def __init__(self, source_language, target_language,
@@ -128,6 +126,21 @@ class DatasetLoader():
             ),
             "samples": 20000 if self.source_lang == "zh" else 14180,
         }
+    @property
+    def eval4nlp_eval_data(self):
+        return {
+            "filename": ("test21.sent.csv", f"eval4nlp-{self.source_lang}-{self.target_lang}-sent.csv"),
+            "url": f"https://github.com/eval4nlp/test-data/raw/master/{self.source_lang}-{self.target_lang}-test21",
+            "samples": 1410 if self.target_lang == "zh" else 1180,
+        }
+
+    def has_eval4nlp_access(self):
+        url = self.eval4nlp_eval_data["url"]
+        path = join(DATADIR, self.eval4nlp_eval_data["filename"][1])
+        try:
+            return isfile(path) or bool(urlopen(url))
+        except URLError:
+            return False
 
     def download(self, dataset, version=None):
         if "filename" in dataset and "url" in dataset:
@@ -135,8 +148,13 @@ class DatasetLoader():
         else:
             identifiers = zip(dataset["filenames"], dataset["urls"])
         for filename, url in identifiers:
+            if isinstance(filename, (tuple, list)):
+                filename, targetname = filename
+            else:
+                filename, targetname = filename, filename
             if version is not None:
                 filename = filename.format(version)
+                targetname = targetname.format(version)
             def progress(b=1, bsize=1, tsize=None):
                 if not hasattr(self, "pbar"):
                     self.pbar = tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=f"Downloading {filename} dataset")
@@ -144,15 +162,24 @@ class DatasetLoader():
                     self.pbar.total = tsize
                 return self.pbar.update(b * bsize - self.pbar.n)
 
-            if not isfile(join(DATADIR, filename)) and "drive.google.com" not in url:
+            if not isfile(join(DATADIR, targetname)) and "drive.google.com" not in url:
                 try:
-                    urlretrieve(join(url, filename), join(DATADIR, filename), progress)
+                    urlretrieve(join(url, filename), join(DATADIR, targetname), progress)
                     del self.pbar
                 except URLError as e:
                     if e.status != 404:
                         raise
-            elif not isfile(join(DATADIR, filename)):
-                cached_download(url, join(DATADIR, filename))
+            elif not isfile(join(DATADIR, targetname)):
+                cached_download(url, join(DATADIR, targetname))
+
+    def nanfloat(_, string):
+        try:
+            return float(string)
+        except ValueError:
+            return nan
+
+    def zscore(_, scores):
+        return (scores - nanmean(scores, 0)) / nanstd(scores, 0)
 
     def cc100_iter(self, language):
         filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
@@ -183,7 +210,7 @@ class DatasetLoader():
             start = self.parallel_data["samples"][0] if name.endswith("align") else 0
             samples = self.parallel_data["samples"][{"": 0, "align": 1, "train": 2}[name.partition("-")[2]]]
             for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), start, None):
-                if src.strip() and tgt.strip():
+                if src.strip() and tgt.strip() and max(len(src), len(tgt)) < self.hard_limit:
                     parallel_source.append(src if index == 0 else tgt)
                     parallel_target.append(tgt if index == 0 else src)
                 if len(parallel_source) >= samples:
@@ -307,6 +334,17 @@ class DatasetLoader():
                     eval_system.append(hypothesis)
                     eval_scores.append(float(mqm_avg_score))
                 assert len(eval_scores) == len(eval_system) == len(eval_scores) == self.mqm_eval_data['samples']
+        elif name.endswith("eval4nlp"):
+            self.download(self.eval4nlp_eval_data)
+            with open(join(DATADIR, self.eval4nlp_eval_data["filename"][1])) as csvfile:
+                lines = csvfile.readlines()
+                sources, targets, scores = list(), list(), empty((len(lines) - 1, 4))
+                for idx, (_, source, target, score1, score2, score3, score4, _) in enumerate(reader(lines[1:])):
+                    sources.append(source)
+                    targets.append(target)
+                    scores[idx] = [self.nanfloat(score1), self.nanfloat(score2), self.nanfloat(score3), self.nanfloat(score4)]
+
+                return sources, targets, nanmean(self.zscore(scores), 1).tolist()
         else:
             self.download(self.wmt16_eval_data)
             samples, members = self.wmt16_eval_data["samples"], self.wmt16_eval_data["members"]
@@ -322,7 +360,7 @@ class DatasetLoader():
             return self.load_parallel(name)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name)
-        elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm"]:
+        elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-eval4nlp"]:
             return self.load_scored(name)
         else:
             raise ValueError(f"{name} is not a valid type!")

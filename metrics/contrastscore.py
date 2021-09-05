@@ -7,7 +7,7 @@ from torch.nn.functional import cosine_similarity
 from math import ceil
 from .utils.knn import ratio_margin_align
 from .common import CommonScore
-from .utils.dataset import DATADIR
+from .utils.env import DATADIR
 from .utils.wmd import word_mover_score
 from .utils.perplexity import lm_perplexity
 from nltk.metrics.distance import edit_distance

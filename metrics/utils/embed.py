@@ -8,7 +8,7 @@ from urllib.request import urlretrieve
 from gzip import open as gopen
 from .language import WordTokenizer
 from .vecmap.map_embeddings import vecmap
-from .dataset import DATADIR
+from .env import DATADIR
 
 fasttext_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/"
 

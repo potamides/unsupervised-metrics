@@ -2,7 +2,7 @@ from ..utils.wmd import word_mover_align, word_mover_score
 from ..utils.knn import wcd_align, ratio_margin_align, cosine_align
 from ..utils.nmt import train, translate
 from ..utils.perplexity import lm_perplexity
-from ..utils.dataset import DATADIR
+from ..utils.env import DATADIR
 from ..common import CommonScore
 from os.path import isfile, join
 from json import dumps

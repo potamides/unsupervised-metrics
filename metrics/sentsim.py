@@ -7,7 +7,7 @@ from torch.nn import CosineSimilarity
 from torch.cuda import is_available as cuda_is_available
 from datasets import load_metric
 from .utils.knn import ratio_margin_align
-from .utils.dataset import DATADIR
+from .utils.env import DATADIR
 from .common import CommonScore
 import torch
 import pulp

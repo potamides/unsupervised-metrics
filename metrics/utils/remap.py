@@ -5,7 +5,7 @@ from subprocess import check_output, DEVNULL
 from tempfile import NamedTemporaryFile as TempFile
 from simalign import SentenceAligner
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
-from .dataset import DATADIR
+from .env import DATADIR
 
 def convert_sent_to_input(sents, tokenizer, max_seq_length):
     input_ids = []

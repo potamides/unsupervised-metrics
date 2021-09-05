@@ -21,7 +21,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 from torch.utils.data import DataLoader
-from .dataset import DATADIR
+from .env import DATADIR
 
 from datasets import load_dataset
 

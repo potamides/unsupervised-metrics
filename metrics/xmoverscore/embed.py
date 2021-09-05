@@ -1,7 +1,7 @@
 from transformers import BertModel, BertTokenizer, BertConfig
 from ..utils.embed import bert_embed, vecmap_embed, map_multilingual_embeddings
 from ..utils.remap import fast_align, awesome_align, sim_align, get_aligned_features_avgbpe, clp, umd
-from ..utils.dataset import DATADIR
+from ..utils.env import DATADIR
 from ..common import CommonScore
 from os.path import isfile, join
 from nltk.metrics.distance import edit_distance
@@ -115,7 +115,7 @@ class BertRemapPretrained(BertEmbed):
     url = f"https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
     def remap(self, source_lang, target_lang):
-        for corpus in ["europarl-v7", "flores-v1", "un-v1"]:
+        for corpus in ["europarl-v7", "flores-v1", "un-v1", "multiun-v1"]:
             try:
                 if self.mapping == "CLP":
                     download = urlopen(self.url.format(corpus, source_lang, target_lang, "BAM")).read()
