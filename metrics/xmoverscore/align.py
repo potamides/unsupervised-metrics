@@ -120,6 +120,7 @@ class XMoverNMTAlign(XMoverAlign):
         self.mt_tokenizer = None
         self.use_cosine = use_cosine
         self.mine_batch_size = mine_batch_size
+        self.back_translate = False
 
     #Override
     def score(self, source_sents, target_sents):
@@ -127,12 +128,24 @@ class XMoverNMTAlign(XMoverAlign):
         if self.mt_model is None or self.mt_tokenizer is None:
             return scores
         else:
-            mt_scores = super().score(self.translate(source_sents), target_sents, True)
+            if self.back_translate:
+                mt_scores = super().score(source_sents, self.translate(target_sents), True)
+            else:
+                mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [self.nmt_weights[0] * score + self.nmt_weights[1] * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, suffix="data", iteration=1, overwrite=True, k=None):
+    def train(self, source_sents, target_sents, suffix="data", iteration=1, overwrite=True, back_translate=False, k=None):
         mine_file, batch, batch_size = join(DATADIR, "translation", f"mined-{suffix}.json"), 0, self.mine_batch_size
         pairs, scores = list(), list()
+        self.back_translate = back_translate
+
+        if self.back_translate:
+            logging.info("Training in back-translation mode, swapping source_sents and target_sents.")
+            source_sents, target_sents = target_sents, source_sents
+            src_lang, tgt_lang = self.tgt_lang, self.src_lang
+        else:
+            src_lang, tgt_lang = self.src_lang, self.tgt_lang
+
         if not isfile(mine_file) or overwrite:
             while batch < len(source_sents):
                 logging.info("Obtaining sentence embeddings.")
@@ -156,7 +169,7 @@ class XMoverNMTAlign(XMoverAlign):
                 for _, (src, tgt) in sorted(zip(scores, pairs), key=lambda tup: tup[0], reverse=True):
                     src_sent, tgt_sent = source_sents[src], target_sents[tgt]
                     if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
-                        line = { "translation": { self.src_lang: src_sent, self.tgt_lang: tgt_sent} }
+                        line = { "translation": { src_lang: src_sent, tgt_lang: tgt_sent} }
                         f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
                         idx += 1
                     if idx >= self.train_size:
@@ -166,20 +179,20 @@ class XMoverNMTAlign(XMoverAlign):
             logging.info("Training MT model with translated and pseudo parallel data.")
             datasets = load_dataset("json", data_files=mine_file)
             translation_file = join(DATADIR, "translation", f"translated-{suffix}-{iteration}.json")
-            sents = list(set(source_sents).difference([entry["translation"][self.src_lang] for entry in datasets['train']]))
+            sents = list(set(source_sents).difference([entry["translation"][src_lang] for entry in datasets['train']]))
 
             if not isfile(translation_file) or overwrite:
                 copyfile(mine_file, translation_file)
                 with open(translation_file, "ab") as f:
                     for src, tgt in zip(sents, self.translate(sents[:self.train_size])):
-                        line = { "translation": { self.src_lang: src, self.tgt_lang: tgt} }
+                        line = { "translation": { src_lang: src, tgt_lang: tgt} }
                         f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, translation_file,
+            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, src_lang, tgt_lang, translation_file,
                     overwrite, f"{suffix}-{iteration}")
         else:
             logging.info("Training MT model with pseudo parallel data.")
-            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, self.src_lang, self.tgt_lang, mine_file,
+            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, src_lang, tgt_lang, mine_file,
                     overwrite, suffix)
 
         self.mt_model.to(self.device)
