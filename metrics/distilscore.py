@@ -36,7 +36,6 @@ class DistilScore(CommonScore):
         k = 5,
         suffix = None
     ):
-        assert "en" in [source_language, target_language], "One language has to be English!"
         self.teacher_model_name = teacher_model_name
         self.student_model_name = student_model_name
         self.target_language = target_language

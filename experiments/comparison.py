@@ -12,7 +12,7 @@ import logging
 newstest2016 = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
 newstest2017 = [('cs', 'en'), ('de', 'en'), ('fi', 'en'), ('lv', 'en'), ('ru', 'en'), ('tr', 'en'), ('zh', 'en')]
 mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
-eval4nlp = [(src, tgt) for src, tgt in [("zh", "de"), ("ru", "de")] if DatasetLoader(src, tgt).has_eval4nlp_access()]
+eval4nlp = [(src, tgt) for src, tgt in [("de", "zh"), ("ru", "de")] if DatasetLoader(src, tgt).has_eval4nlp_access()]
 mqm = [("en", "de"), ("zh", "en")]
 
 lm_model = {"en": "gpt2", "ru": "sberbank-ai/rugpt3small_based_on_gpt2", "de": "dbmdz/german-gpt2",

@@ -110,12 +110,12 @@ class BertRemapPretrained(BertEmbed):
     Obtains pretrained remapping matrices from original XMoverScore repository.
     """
 
-    commit = "b37762cdfd0e0f987fb8c39a6a82a07b96d9d682"
+    commit = "732b65d03e1f703398486f83a2e5c5bbdb7753d7"
     path = "mapping/layer-12/{}.{}-{}.2k.12.{}"
-    url = f"https://github.com/AIPHES/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
+    url = f"https://github.com/potamides/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
     def remap(self, source_lang, target_lang):
-        for corpus in ["europarl-v7", "flores-v1", "un-v1", "multiun-v1"]:
+        for corpus in ["europarl-v7", "flores-v1", "un-v1", "wikimedia-v20210402"]:
             try:
                 if self.mapping == "CLP":
                     download = urlopen(self.url.format(corpus, source_lang, target_lang, "BAM")).read()
