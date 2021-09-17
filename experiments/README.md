@@ -5,13 +5,14 @@ the experiments train the used models from scratch, since it is difficult to
 distribute all created model files due to storage limitations. If you need the
 original model files due to reproducability reasons, please contact the
 maintainers of this repository. Created files are cached in
-`${METRICS_HOME:-${XDG_CACHE_HOME:-~/.cache/metrics}}`, so training and
+`${METRICS_HOME:-${XDG_CACHE_HOME:-~/.cache}/metrics}`, so training and
 pre-processing only happens once. Please be careful when interrupting a running
-process, as created files are not yet checked for their integrity. Most models
-were trained on beefy workstations like the [NVIDIA DGX
-A100](https://www.nvidia.com/en-us/data-center/dgx-a100). The majority of
-experiments require considerably less resources, but out-of-memory errors are
-to be expected.
+process, as created files are not yet checked for their integrity.
+
+Also please bear in mind, that most models were trained on beefy workstations
+like the [NVIDIA DGX A100](https://www.nvidia.com/en-us/data-center/dgx-a100).
+The majority of experiments require considerably less resources, but in this
+case out-of-memory errors are to be expected.
 
 ## Included Experiments
 * `remap.py` Remap XMoverScore on pseudo-parallel sentences.
