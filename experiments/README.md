@@ -12,7 +12,8 @@ process, as created files are not yet checked for their integrity.
 Also please bear in mind, that most models were trained on beefy workstations
 like the [NVIDIA DGX A100](https://www.nvidia.com/en-us/data-center/dgx-a100).
 The majority of experiments require considerably less resources, but in this
-case out-of-memory errors are to be expected.
+case out-of-memory errors are to be expected. Model inference is of course less
+resource intensive.
 
 ## Included Experiments
 * `remap.py` Remap XMoverScore on pseudo-parallel sentences.
