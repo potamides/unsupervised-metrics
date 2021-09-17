@@ -198,7 +198,7 @@ class XMoverNMTAlign(XMoverAlign):
         self.mt_model.to(self.device)
 
     def translate(self, sentences):
-        logging.info("Translating sentences into target language.")
+        logging.info(f"Translating sentences into {'source' if self.back_translate else 'target'} language.")
         return translate(self.mt_model, self.mt_tokenizer, sentences, self.translate_batch_size, self.device)
 
 class XMoverNMTLMAlign(XMoverNMTAlign):
