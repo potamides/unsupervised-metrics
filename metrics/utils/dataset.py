@@ -127,6 +127,13 @@ class DatasetLoader():
             "samples": 20000 if self.source_lang == "zh" else 14180,
         }
     @property
+    def wikimatrix_data(self):
+        return {
+            "filename": "WikiMatrix.{}-{}.tsv.gz".format(*sorted([self.source_lang, self.target_lang])),
+            "url": "https://dl.fbaipublicfiles.com/laser/WikiMatrix/v1/",
+            "samples": 10000,
+        }
+    @property
     def eval4nlp_eval_data(self):
         return {
             "filename": ("test21.sent.csv", f"eval4nlp-{self.source_lang}-{self.target_lang}-sent.csv"),
@@ -203,20 +210,38 @@ class DatasetLoader():
         return sents
 
     def load_parallel(self, name):
-        self.download(self.parallel_data)
         parallel_source, parallel_target = list(), list()
-        index = 0 if isfile(join(DATADIR, self.parallel_data["filenames"][0])) else 1
-        with gopen(join(DATADIR, self.parallel_data["filenames"][index]), 'rt') as tsvfile:
-            start = self.parallel_data["samples"][0] if name.endswith("align") else 0
-            samples = self.parallel_data["samples"][{"": 0, "align": 1, "train": 2}[name.partition("-")[2]]]
-            for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), start, None):
-                if src.strip() and tgt.strip() and max(len(src), len(tgt)) < self.hard_limit:
-                    parallel_source.append(src if index == 0 else tgt)
-                    parallel_target.append(tgt if index == 0 else src)
-                if len(parallel_source) >= samples:
-                    break
-            else:
-                warn(f"Only obtained {len(parallel_source)} sentence pairs.")
+        if name.startswith("parallel"):
+            self.download(self.parallel_data)
+            index = 0 if isfile(join(DATADIR, self.parallel_data["filenames"][0])) else 1
+            with gopen(join(DATADIR, self.parallel_data["filenames"][index]), 'rt') as tsvfile:
+                start = self.parallel_data["samples"][0] if name.endswith("align") else 0
+                samples = self.parallel_data["samples"][{"": 0, "align": 1, "train": 2}[name.partition("-")[2]]]
+                for src, tgt in islice(reader(tsvfile, delimiter="\t", quoting=QUOTE_NONE), start, None):
+                    if src.strip() and tgt.strip() and max(len(src), len(tgt)) < self.hard_limit:
+                        parallel_source.append(src if index == 0 else tgt)
+                        parallel_target.append(tgt if index == 0 else src)
+                    if len(parallel_source) >= samples:
+                        break
+                else:
+                    warn(f"Only obtained {len(parallel_source)} sentence pairs.")
+        else:
+            self.download(self.wikimatrix_data)
+            with gopen(join(DATADIR, self.wikimatrix_data['filename']), 'rt') as f:
+                for line in f:
+                    score, sent1, sent2 = line.strip().split('\t')
+                    sent1, sent2, score = sent1.strip(), sent2.strip(), float(score)
+                    if sorted([self.source_lang, self.target_lang]).index(self.source_lang) == 1:
+                        sent1, sent2 = sent2, sent1
+                    if sent1 == sent2 or sent1 in parallel_source or sent2 in parallel_target:
+                        continue
+                    parallel_source.append(sent1)
+                    parallel_target.append(sent2)
+                    if len(parallel_source) >= self.wikimatrix_data['samples']:
+                        break
+                else:
+                    warn(f"Only obtained {len(parallel_source)} sentence pairs.")
+
         return parallel_source, parallel_target
 
     def load_monolingual(self, name):
@@ -356,7 +381,7 @@ class DatasetLoader():
         return eval_source, eval_system, eval_scores
 
     def load(self, name):
-        if name in ["parallel", "parallel-align", "parallel-train"]:
+        if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix"]:
             return self.load_parallel(name)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name)

@@ -11,7 +11,7 @@ import logging
 
 newstest2016 = [("de", "en"), ("en", "ru"), ("ru", "en"), ("ro", "en"), ("cs", "en"), ("fi", "en"), ("tr", "en")]
 newstest2017 = [('cs', 'en'), ('de', 'en'), ('fi', 'en'), ('lv', 'en'), ('ru', 'en'), ('tr', 'en'), ('zh', 'en')]
-mlqpe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
+mlqe = [("en", "de"), ("en", "zh"), ("ru", "en"), ("ro", "en"), ("et", "en"), ("ne", "en"), ("si", "en")]
 eval4nlp = [(src, tgt) for src, tgt in [("de", "zh"), ("ru", "de")] if DatasetLoader(src, tgt).has_eval4nlp_access()]
 mqm = [("en", "de"), ("zh", "en")]
 
@@ -119,7 +119,7 @@ def self_learning_tests(source_lang, target_lang, dataset_name, max_len=30):
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
 datasets = (("Newstest-2016", "scored", newstest2016), ("Newstest-2017", "scored-wmt17", newstest2017),
-        ("MLQE-PE", "scored-mlqe", mlqpe), ("MQM-Newstest-2020", "scored-mqm", mqm),
+        ("MLQE-PE", "scored-mlqe", mlqe), ("MQM-Newstest-2020", "scored-mqm", mqm),
         ("Eval4NLP-2021", "scored-eval4nlp", eval4nlp))
 for dataset, identifier, pairs in datasets:
     for source_lang, target_lang in pairs:

@@ -141,7 +141,7 @@ class ContrastScore(CommonScore):
                 sents.append(line.decode().strip().split("\t"))
             return sents
 
-    def train(self, source_sents, target_sents, aligned=False, overwrite=True):
+    def train(self, source_sents, target_sents, aligned=False, finetune=False, overwrite=True):
         if not isfile(join(self.path, 'config.json')) or overwrite:
             # Convert train sentences to sentence pairs
             if aligned:
@@ -153,9 +153,12 @@ class ContrastScore(CommonScore):
             # DataLoader to batch your data
             train_dataloader = DataLoader(train_data, batch_size=self.train_batch_size, shuffle=True)
 
+            if finetune:
+                new_model = self.model
             # Train a new model
-            del self.model
-            new_model = self.load_model(self.model_name)
+            else:
+                del self.model
+                new_model = self.load_model(self.model_name)
 
             # Use contrastive learning loss
             if self.parallelize and device_count() > 1:

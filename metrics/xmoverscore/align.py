@@ -134,7 +134,8 @@ class XMoverNMTAlign(XMoverAlign):
                 mt_scores = super().score(self.translate(source_sents), target_sents, True)
             return [self.nmt_weights[0] * score + self.nmt_weights[1] * mt_score for score, mt_score in zip(scores, mt_scores)]
 
-    def train(self, source_sents, target_sents, suffix="data", iteration=1, overwrite=True, back_translate=False, k=None):
+    def train(self, source_sents, target_sents, suffix="data", iteration=1, aligned=False, finetune=False, overwrite=True,
+            back_translate=False, k=None):
         mine_file, batch, batch_size = join(DATADIR, "translation", f"mined-{suffix}.json"), 0, self.mine_batch_size
         pairs, scores = list(), list()
         self.back_translate = back_translate
@@ -146,7 +147,7 @@ class XMoverNMTAlign(XMoverAlign):
         else:
             src_lang, tgt_lang = self.src_lang, self.tgt_lang
 
-        if not isfile(mine_file) or overwrite:
+        if (not isfile(mine_file) or overwrite) and not aligned:
             while batch < len(source_sents):
                 logging.info("Obtaining sentence embeddings.")
                 batch_src, batch_tgt = source_sents[batch:batch + batch_size], target_sents[batch:batch + batch_size]
@@ -174,22 +175,34 @@ class XMoverNMTAlign(XMoverAlign):
                         idx += 1
                     if idx >= self.train_size:
                         break
+        elif (not isfile(mine_file) or overwrite) and aligned:
+            with open(mine_file, "wb") as f:
+                for src_sent, tgt_sent in zip(source_sents, target_sents):
+                    line = { "translation": { src_lang: src_sent, tgt_lang: tgt_sent} }
+                    f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-        if self.mt_model is not None and self.mt_tokenizer is not None:
-            logging.info("Training MT model with translated and pseudo parallel data.")
-            datasets = load_dataset("json", data_files=mine_file)
-            translation_file = join(DATADIR, "translation", f"translated-{suffix}-{iteration}.json")
-            sents = list(set(source_sents).difference([entry["translation"][src_lang] for entry in datasets['train']]))
+        if finetune:
+            if self.mt_model is not None and self.mt_tokenizer is not None:
+                self.mt_model, self.mt_tokenizer = train(self.mt_model.name_or_path, src_lang, tgt_lang, mine_file,
+                        overwrite, suffix)
+            else:
+                raise ValueError("Wanted to finetune existing model but none was found.")
+        elif self.mt_model is not None and self.mt_tokenizer is not None:
+                logging.info("Training MT model with translated and pseudo parallel data.")
+                datasets = load_dataset("json", data_files=mine_file)
+                translation_file = join(DATADIR, "translation", f"translated-{suffix}-{iteration}.json")
+                sents = list(set(source_sents).difference([entry["translation"][src_lang] for entry in datasets['train']]))
 
-            if not isfile(translation_file) or overwrite:
-                copyfile(mine_file, translation_file)
-                with open(translation_file, "ab") as f:
-                    for src, tgt in zip(sents, self.translate(sents[:self.train_size])):
-                        line = { "translation": { src_lang: src, tgt_lang: tgt} }
-                        f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
+                if not isfile(translation_file) or overwrite:
+                    copyfile(mine_file, translation_file)
+                    with open(translation_file, "ab") as f:
+                        for src, tgt in zip(sents, self.translate(sents[:self.train_size])):
+                            line = { "translation": { src_lang: src, tgt_lang: tgt} }
+                            f.write(dumps(line, ensure_ascii=False).encode() + b"\n")
 
-            self.mt_model, self.mt_tokenizer = train(self.mt_model_name, src_lang, tgt_lang, translation_file,
-                    overwrite, f"{suffix}-{iteration}")
+                self.mt_model, self.mt_tokenizer = train(self.mt_model_name, src_lang, tgt_lang, translation_file,
+                        overwrite, f"{suffix}-{iteration}")
+
         else:
             logging.info("Training MT model with pseudo parallel data.")
             self.mt_model, self.mt_tokenizer = train(self.mt_model_name, src_lang, tgt_lang, mine_file,
