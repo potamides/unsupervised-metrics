@@ -62,7 +62,7 @@ demonstrated in the code block below. Existing metrics are defined in the
 [metrics](metrics) package, which could serve as a source of inspiration.
 
 ```python
-from .common import CommonScore
+from metrics.common import CommonScore
 
 class MyOwnMetric(CommonScore):
     def align():
