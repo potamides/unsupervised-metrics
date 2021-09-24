@@ -209,7 +209,6 @@ def _train(args=None):
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
 
-
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
@@ -292,13 +291,7 @@ def _train(args=None):
     )
 
     # Training
-    if last_checkpoint is not None:
-        checkpoint = last_checkpoint
-    elif os.path.isdir(model_args.model_name_or_path):
-        checkpoint = model_args.model_name_or_path
-    else:
-        checkpoint = None
-    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
     trainer.save_model(training_args.output_dir)  # Saves the tokenizer too
 
     metrics = train_result.metrics
@@ -313,14 +306,14 @@ def _train(args=None):
     return load_model_and_tokenizer(training_args.output_dir, data_args.source_lang,
             data_args.target_lang, model_args.use_fast_tokenizer, model_args.cache_dir)
 
-def train(model, source_lang, target_lang, dataset, overwrite, suffix):
+def train(model, source_lang, target_lang, dataset, overwrite, suffix, name=None):
     if "mbart" in model:
         source_lang = language2mBART[source_lang]
         target_lang = language2mBART[target_lang]
     args = [
         "--model_name_or_path", model,
-        "--cache_dir", os.path.join(DATADIR, "translation", os.path.basename(model), suffix, "cache"),
-        "--output_dir", os.path.join(DATADIR, "translation", os.path.basename(model), suffix, "output"),
+        "--cache_dir", os.path.join(DATADIR, "translation", name or os.path.basename(model), suffix, "cache"),
+        "--output_dir", os.path.join(DATADIR, "translation", name or os.path.basename(model), suffix, "output"),
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,

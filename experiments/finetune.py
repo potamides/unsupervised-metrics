@@ -25,9 +25,10 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
     dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
     mono_src, mono_tgt = dataset.load("monolingual-align")
-    para_src, para_tgt = dataset.load("wikimatrix")
     train_src, train_tgt = dataset.load("monolingual-train")
     eval_src, eval_system, eval_scores = dataset.load("scored-mlqe")
+    #dataset.hard_limit = 400 # adjust this to quickfix oom errors
+    para_src, para_tgt = dataset.load("wikimatrix")
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
     results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"Fine-tuned XMoverScore ({max_len} tokens)",
             f"ContrastScore ({max_len} tokens)", f"Fine-tuned ContrastScore ({max_len} tokens)",
@@ -46,8 +47,11 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
     results["pearson"].append(round(100 * pearson, 2))
     results["spearman"].append(round(100 * spearman, 2))
 
+    logging.info(f"Remapping on parallel data.")
+    xmover.mapping = "CLP"
+    xmover.remap(para_src, para_tgt, suffix=suffix.replace("UMD", "CLP") + "-finetuned", aligned=True, overwrite=False)
     logging.info(f"NMT training on parallel data.")
-    xmover.train(para_src, para_tgt, suffix=suffix+"-finetuned", iteration=iteration, aligned=True,
+    xmover.train(para_src, para_tgt, suffix=suffix + "-finetuned", iteration=iteration, aligned=True,
             finetune=True, overwrite=False, k=1)
 
     pearson, spearman = xmover.correlation(eval_src, eval_system, eval_scores)

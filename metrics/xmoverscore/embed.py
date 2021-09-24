@@ -69,16 +69,18 @@ class BertRemap(BertEmbed):
         self.remap_size = remap_size
         self.alignment = alignment
 
-    def remap(self, source_sents, target_sents, suffix="tensor", overwrite=True):
+    def remap(self, source_sents, target_sents, suffix="tensor", aligned=False, overwrite=True):
         file_path = join(DATADIR, f"projection-{suffix}.pt")
         if not isfile(file_path) or overwrite:
             logging.info(f'Computing projection tensor for {self.mapping} remapping method.')
-            sent_pairs, scores = self.align(source_sents, target_sents)
             sorted_sent_pairs = list()
-            for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
-                if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
-                    sorted_sent_pairs.append((src_sent, tgt_sent))
-
+            if aligned:
+                sorted_sent_pairs.extend(zip(source_sents, target_sents))
+            else:
+                sent_pairs, scores = self.align(source_sents, target_sents)
+                for _, (src_sent, tgt_sent) in sorted(zip(scores, sent_pairs), key=lambda tup: tup[0], reverse=True):
+                    if edit_distance(src_sent, tgt_sent) / max(len(src_sent), len(tgt_sent)) > 0.5:
+                        sorted_sent_pairs.append((src_sent, tgt_sent))
             if self.alignment == "fast":
                 tokenized_pairs, align_pairs = fast_align(sorted_sent_pairs, self.tokenizer, self.remap_size)
             elif self.alignment == "sim":

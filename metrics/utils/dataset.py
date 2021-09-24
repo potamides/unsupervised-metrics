@@ -233,10 +233,11 @@ class DatasetLoader():
                     sent1, sent2, score = sent1.strip(), sent2.strip(), float(score)
                     if sorted([self.source_lang, self.target_lang]).index(self.source_lang) == 1:
                         sent1, sent2 = sent2, sent1
-                    if sent1 == sent2 or sent1 in parallel_source or sent2 in parallel_target:
-                        continue
-                    parallel_source.append(sent1)
-                    parallel_target.append(sent2)
+
+                    if sent1 != sent2 and sent1 not in parallel_source and sent2 not in parallel_target \
+                    and max(len(sent1), len(sent2)) < self.hard_limit:
+                        parallel_source.append(sent1)
+                        parallel_target.append(sent2)
                     if len(parallel_source) >= self.wikimatrix_data['samples']:
                         break
                 else:

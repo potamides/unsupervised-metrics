@@ -4,7 +4,7 @@ from ..utils.nmt import train, translate
 from ..utils.perplexity import lm_perplexity
 from ..utils.env import DATADIR
 from ..common import CommonScore
-from os.path import isfile, join
+from os.path import isfile, join, basename
 from json import dumps
 from math import ceil
 from numpy import arange, array
@@ -184,7 +184,7 @@ class XMoverNMTAlign(XMoverAlign):
         if finetune:
             if self.mt_model is not None and self.mt_tokenizer is not None:
                 self.mt_model, self.mt_tokenizer = train(self.mt_model.name_or_path, src_lang, tgt_lang, mine_file,
-                        overwrite, suffix)
+                        overwrite, suffix, name=basename(self.mt_model_name))
             else:
                 raise ValueError("Wanted to finetune existing model but none was found.")
         elif self.mt_model is not None and self.mt_tokenizer is not None:
