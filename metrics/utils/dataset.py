@@ -209,7 +209,7 @@ class DatasetLoader():
                     sents.add(sent)
         return sents
 
-    def load_parallel(self, name):
+    def load_parallel(self, name, count):
         parallel_source, parallel_target = list(), list()
         if name.startswith("parallel"):
             self.download(self.parallel_data)
@@ -238,7 +238,7 @@ class DatasetLoader():
                     and max(len(sent1), len(sent2)) < self.hard_limit:
                         parallel_source.append(sent1)
                         parallel_target.append(sent2)
-                    if len(parallel_source) >= self.wikimatrix_data['samples']:
+                    if len(parallel_source) >= count or self.wikimatrix_data['samples']:
                         break
                 else:
                     warn(f"Only obtained {len(parallel_source)} sentence pairs.")
@@ -381,9 +381,9 @@ class DatasetLoader():
                     eval_scores.append(float(score.decode()))
         return eval_source, eval_system, eval_scores
 
-    def load(self, name):
+    def load(self, name, wikimatrix_count=None): # in a refactor it would make sense to allow this for all datasets
         if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix"]:
-            return self.load_parallel(name)
+            return self.load_parallel(name, wikimatrix_count)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name)
         elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-eval4nlp"]:

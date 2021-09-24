@@ -19,7 +19,7 @@ def correlation(model_scores, ref_scores):
     ref_ranks, ranks = argsort(ref_scores).argsort(), argsort(model_scores).argsort()
     return corrcoef(ref_scores, model_scores)[0,1], corrcoef(ref_ranks, ranks)[0,1]
 
-def self_learning_tests(source_lang, target_lang, max_len=30):
+def self_learning_tests(source_lang, target_lang, max_len=30, size=30000):
     xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1],
             nmt_weights=[0.5, 0.4], use_lm=True, lm_model_name=lm_model[target_lang])
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
@@ -28,7 +28,7 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
     train_src, train_tgt = dataset.load("monolingual-train")
     eval_src, eval_system, eval_scores = dataset.load("scored-mlqe")
     #dataset.hard_limit = 400 # adjust this to quickfix oom errors
-    para_src, para_tgt = dataset.load("wikimatrix")
+    para_src, para_tgt = dataset.load("wikimatrix", size)
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
     results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"Fine-tuned XMoverScore ({max_len} tokens)",
             f"ContrastScore ({max_len} tokens)", f"Fine-tuned ContrastScore ({max_len} tokens)",
@@ -49,9 +49,9 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
 
     logging.info(f"Remapping on parallel data.")
     xmover.mapping = "CLP"
-    xmover.remap(para_src, para_tgt, suffix=suffix.replace("UMD", "CLP") + "-finetuned", aligned=True, overwrite=False)
+    xmover.remap(para_src, para_tgt, suffix=suffix.replace("UMD", "CLP") + f"-finetuned-{size}", aligned=True, overwrite=False)
     logging.info(f"NMT training on parallel data.")
-    xmover.train(para_src, para_tgt, suffix=suffix + "-finetuned", iteration=iteration, aligned=True,
+    xmover.train(para_src, para_tgt, suffix=suffix + f"-finetuned-{size}", iteration=iteration, aligned=True,
             finetune=True, overwrite=False, k=1)
 
     pearson, spearman = xmover.correlation(eval_src, eval_system, eval_scores)
@@ -71,7 +71,7 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
     results["spearman"].append(round(100 * spearman, 2))
 
     logging.info(f"Contrastive Learning on parallel data.")
-    contrast.suffix = f"{max_len}-finetuned"
+    contrast.suffix = f"{max_len}-finetuned-{size}"
     contrast.train(para_src, para_tgt, aligned=True, finetune=True, overwrite=False)
 
     pearson, spearman = contrast.correlation(eval_src, eval_system, eval_scores)
@@ -89,7 +89,8 @@ def self_learning_tests(source_lang, target_lang, max_len=30):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-for source_lang, target_lang in mlqe:
-    print(f"Evaluating {source_lang}-{target_lang} language direction on MLQE-PE")
-    print(self_learning_tests(source_lang, target_lang, max_len=30))
-    print(self_learning_tests(source_lang, target_lang, max_len=50))
+for size in (10000, 20000, 30000):
+    for source_lang, target_lang in mlqe:
+        print(f"Evaluating {source_lang}-{target_lang} language direction on MLQE-PE using {size} parallel sentences.")
+        print(self_learning_tests(source_lang, target_lang, max_len=30, size=size))
+        print(self_learning_tests(source_lang, target_lang, max_len=50, size=size))
