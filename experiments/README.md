@@ -17,6 +17,7 @@ resource intensive.
 
 ## Included Experiments
 * `remap.py` Remap XMoverScore on pseudo-parallel sentences.
+* `quantity.py` Remap XMoverScore on pseudo-parallel sentences mined from different amounts of monolingual data.
 * `vecmap.py` Use XMoverScore and mean-pooling metrics with [VecMap](https://github.com/artetxem/vecmap) embeddings.
 * `nmt.py` Combine XMoverScore with an unsupervised NMT model.
 * `lm.py` Combine XMoverScore with an unsupervised NMT model and a language model of the target language.

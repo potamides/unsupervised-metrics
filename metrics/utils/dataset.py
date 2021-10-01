@@ -19,6 +19,8 @@ from .language import LangDetect, WordTokenizer, SentenceSplitter
 from .env import DATADIR
 from numpy import nan, nanmean, nanstd, empty
 
+# If I ever manage to refactor this abomination, the easiest way would
+# probably to reimplement it as huggingface datasets.
 class DatasetLoader():
     def __init__(self, source_language, target_language,
             min_monolingual_sent_len=3, max_monolingual_sent_len=30,
@@ -245,8 +247,8 @@ class DatasetLoader():
 
         return parallel_source, parallel_target
 
-    def load_monolingual(self, name):
-        samples, patterns = self.monolingual_data["samples"][1 if name.endswith("train") else 0], list()
+    def load_monolingual(self, name, count):
+        samples, patterns = count or self.monolingual_data["samples"][1 if name.endswith("train") else 0], list()
         cache_file = join(DATADIR, "preprocessed-datasets",
                 f"{name}-{self.source_lang}-{self.target_lang}-{self.min_monolingual_sent_len}-{self.max_monolingual_sent_len}.pkl")
         makedirs(dirname(cache_file), exist_ok=True)
@@ -281,10 +283,11 @@ class DatasetLoader():
         else:
             if min(len(mono_source), len(mono_target)) < samples:
                 warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
-        with open(cache_file, 'wb') as f:
-            mono_source, mono_target = list(mono_source), list(mono_target)
-            dump((mono_source, mono_target), f)
-            return mono_source, mono_target
+        mono_source, mono_target = list(mono_source), list(mono_target)
+        if not count:
+            with open(cache_file, 'wb') as f:
+                dump((mono_source, mono_target), f)
+        return mono_source, mono_target
 
     def load_scored(self, name):
         eval_source, eval_system, eval_scores = list(), list(), list()
@@ -381,11 +384,11 @@ class DatasetLoader():
                     eval_scores.append(float(score.decode()))
         return eval_source, eval_system, eval_scores
 
-    def load(self, name, wikimatrix_count=None): # in a refactor it would make sense to allow this for all datasets
+    def load(self, name, count=None): # in a refactor it would make sense to allow this for all datasets
         if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix"]:
-            return self.load_parallel(name, wikimatrix_count)
+            return self.load_parallel(name, count)
         elif name in ["monolingual-align", "monolingual-train"]:
-            return self.load_monolingual(name)
+            return self.load_monolingual(name, count)
         elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-eval4nlp"]:
             return self.load_scored(name)
         else:

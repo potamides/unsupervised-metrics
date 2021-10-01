@@ -2,7 +2,6 @@
 from metrics.xmoverscore import XMoverNMTLMBertAlignScore
 from metrics.contrastscore import ContrastScore
 from metrics.utils.dataset import DatasetLoader
-from datasets import load_dataset
 from collections import defaultdict
 from tabulate import tabulate
 from numpy import corrcoef, argsort
