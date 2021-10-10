@@ -24,6 +24,6 @@ resource intensive.
 * `distil.py` Create distilled cross-lingual sentence embeddings using pseudo-parallel sentences.
 * `contrast.py` Created cross-lingual sentence embeddings using a contrastive learning objective.
 * `combine.py` Combine XMoverScore with ContrastScore.
-* `comparison.py` Combine all self-learned metrics with strong baselines on multiple language directions and datasets.
+* `comparison.py` Compare all self-learned metrics with strong baselines on multiple language directions and datasets.
 * `finetune.py` Finetune induced self-learned metrics on small parallel corpora.
 * `parallel.py` Create distilled and contrastive cross-lingual sentence embeddings only on parallel data.

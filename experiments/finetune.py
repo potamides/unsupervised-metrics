@@ -22,11 +22,10 @@ def self_learning_tests(source_lang, target_lang, max_len=30, size=30000):
     xmover = XMoverNMTLMBertAlignScore(src_lang=source_lang, tgt_lang=target_lang, lm_weights=[1, 0.1],
             nmt_weights=[0.5, 0.4], use_lm=True, lm_model_name=lm_model[target_lang])
     contrast = ContrastScore(source_language=source_lang, target_language=target_lang, parallelize=True)
-    dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len)
+    dataset = DatasetLoader(source_lang, target_lang, max_monolingual_sent_len=max_len, hard_limit=500)
     mono_src, mono_tgt = dataset.load("monolingual-align")
     train_src, train_tgt = dataset.load("monolingual-train")
     eval_src, eval_system, eval_scores = dataset.load("scored-mlqe")
-    #dataset.hard_limit = 400 # adjust this to quickfix oom errors
     para_src, para_tgt = dataset.load("wikimatrix", size)
     suffix = f"{source_lang}-{target_lang}-awesome-wmd-{xmover.mapping}-monolingual-align-{xmover.k}-{xmover.remap_size}-{40000}-{max_len}"
     results, index = defaultdict(list), [f"XMoverScore ({max_len} tokens)", f"Fine-tuned XMoverScore ({max_len} tokens)",
@@ -88,7 +87,7 @@ def self_learning_tests(source_lang, target_lang, max_len=30, size=30000):
     return tabulate(results, headers="keys", showindex=index)
 
 logging.basicConfig(level=logging.INFO, datefmt="%m-%d %H:%M", format="%(asctime)s %(levelname)-8s %(message)s")
-for size in (10000, 20000, 30000):
+for size in (10000, 20000, 30000, 200000):
     for source_lang, target_lang in mlqe:
         print(f"Evaluating {source_lang}-{target_lang} language direction on MLQE-PE using {size} parallel sentences.")
         print(self_learning_tests(source_lang, target_lang, max_len=30, size=size))
