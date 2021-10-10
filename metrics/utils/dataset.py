@@ -230,17 +230,20 @@ class DatasetLoader():
         else:
             self.download(self.wikimatrix_data)
             with gopen(join(DATADIR, self.wikimatrix_data['filename']), 'rt') as f:
+                source_set, target_set = set(), set()
                 for line in f:
                     score, sent1, sent2 = line.strip().split('\t')
                     sent1, sent2, score = sent1.strip(), sent2.strip(), float(score)
                     if sorted([self.source_lang, self.target_lang]).index(self.source_lang) == 1:
                         sent1, sent2 = sent2, sent1
 
-                    if sent1 != sent2 and sent1 not in parallel_source and sent2 not in parallel_target \
+                    if sent1 != sent2 and sent1 not in source_set and sent2 not in target_set \
                     and max(len(sent1), len(sent2)) < self.hard_limit:
                         parallel_source.append(sent1)
                         parallel_target.append(sent2)
-                    if len(parallel_source) >= count or self.wikimatrix_data['samples']:
+                        source_set.add(sent1)
+                        target_set.add(sent2)
+                    if len(parallel_source) >= (count or self.wikimatrix_data['samples']):
                         break
                 else:
                     warn(f"Only obtained {len(parallel_source)} sentence pairs.")
@@ -252,7 +255,7 @@ class DatasetLoader():
         cache_file = join(DATADIR, "preprocessed-datasets",
                 f"{name}-{self.source_lang}-{self.target_lang}-{self.min_monolingual_sent_len}-{self.max_monolingual_sent_len}.pkl")
         makedirs(dirname(cache_file), exist_ok=True)
-        if isfile(cache_file):
+        if not count and isfile(cache_file):
             with open(cache_file, 'rb') as f:
                 return load(f)
         mono_source, mono_target = set(), set()
