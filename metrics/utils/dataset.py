@@ -14,10 +14,12 @@ from logging import warn
 from re import search
 from pickle import load, dump
 from gdown import cached_download
+from zipfile import ZipFile
 from linecache import getline
 from .language import LangDetect, WordTokenizer, SentenceSplitter
 from .env import DATADIR
 from numpy import nan, nanmean, nanstd, empty
+from random import Random
 
 # If I ever manage to refactor this abomination, the easiest way would
 # probably to reimplement it as huggingface datasets.
@@ -136,6 +138,20 @@ class DatasetLoader():
             "samples": 10000,
         }
     @property
+    def nepali_data(self):
+        return {
+            "filename": "corpus.zip",
+            "url": "https://drive.google.com/uc?id=1UThfJKJFvDgTu263DNbz-WPNLqoARZ_0",
+            "samples": 10000,
+        }
+    @property
+    def ccmatrix_data(self):
+        return {
+            "filename": "{}-{}.txt.zip".format(*sorted([self.source_lang, self.target_lang])),
+            "url": "https://opus.nlpl.eu/download.php?f=CCMatrix/v1/moses",
+            "samples": 10000,
+        }
+    @property
     def eval4nlp_eval_data(self):
         return {
             "filename": ("test21.sent.csv", f"eval4nlp-{self.source_lang}-{self.target_lang}-sent.csv"),
@@ -227,7 +243,7 @@ class DatasetLoader():
                         break
                 else:
                     warn(f"Only obtained {len(parallel_source)} sentence pairs.")
-        else:
+        elif name == "wikimatrix":
             self.download(self.wikimatrix_data)
             with gopen(join(DATADIR, self.wikimatrix_data['filename']), 'rt') as f:
                 source_set, target_set = set(), set()
@@ -247,6 +263,39 @@ class DatasetLoader():
                         break
                 else:
                     warn(f"Only obtained {len(parallel_source)} sentence pairs.")
+        elif name == "nepali":
+            assert {self.source_lang, self.target_lang} == {"en", "ne"}
+            self.download(self.nepali_data)
+            with ZipFile(join(DATADIR, self.nepali_data['filename'])) as zf:
+                with zf.open('consolidated/train.en') as f, zf.open('consolidated/train.ne') as g:
+                    for src, tgt in zip(f, g):
+                        if  max(len(src := src.strip().decode()), len(tgt := tgt.strip().decode())) < self.hard_limit:
+                            parallel_source.append(src if self.source_lang == "en" else tgt)
+                            parallel_target.append(tgt if self.target_lang == "ne" else src)
+            Random(0).shuffle(parallel_source)
+            Random(0).shuffle(parallel_target)
+            if len(parallel_source) > (count or self.nepali_data['samples']):
+                parallel_source = parallel_source[:count or self.nepali_data['samples']]
+                parallel_target = parallel_target[:count or self.nepali_data['samples']]
+            else:
+                warn(f"Only obtained {len(parallel_source)} sentence pairs.")
+        else:
+            self.download(self.ccmatrix_data)
+            with ZipFile(join(DATADIR, self.ccmatrix_data['filename'])) as zf:
+                basename = "CCMatrix." + "-".join(sorted([self.source_lang, self.target_lang]))
+                with zf.open(f"{basename}.{self.source_lang}") as f, zf.open(f"{basename}.{self.target_lang}") as g:
+                    source_set, target_set = set(), set()
+                    for sent1, sent2 in zip(f, g):
+                        if sent1 != sent2 and sent1.lower() not in source_set and sent2.lower() not in target_set \
+                        and max(len(sent1), len(sent2)) < self.hard_limit:
+                            parallel_source.append(sent1.decode().strip())
+                            parallel_target.append(sent2.decode().strip())
+                            source_set.add(sent1.lower())
+                            target_set.add(sent2.lower())
+                        if len(parallel_source) >= (count or self.ccmatrix_data['samples']):
+                            break
+                    else:
+                        warn(f"Only obtained {len(parallel_source)} sentence pairs.")
 
         return parallel_source, parallel_target
 
@@ -388,7 +437,7 @@ class DatasetLoader():
         return eval_source, eval_system, eval_scores
 
     def load(self, name, count=None): # in a refactor it would make sense to allow this for all datasets
-        if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix"]:
+        if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix", "nepali", "ccmatrix"]:
             return self.load_parallel(name, count)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name, count)
