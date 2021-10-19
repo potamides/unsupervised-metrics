@@ -23,7 +23,8 @@ resource intensive.
 * `lm.py` Combine XMoverScore with an unsupervised NMT model and a language model of the target language.
 * `distil.py` Create distilled cross-lingual sentence embeddings using pseudo-parallel sentences.
 * `contrast.py` Created cross-lingual sentence embeddings using a contrastive learning objective.
-* `combine.py` Combine XMoverScore with ContrastScore.
+* `combine.py` Combine word-embeddings with sentence-embeddings in a single metric (XMoverScore + ContrastScore).
 * `comparison.py` Compare all self-learned metrics with strong baselines on multiple language directions and datasets.
 * `finetune.py` Finetune induced self-learned metrics on small parallel corpora.
 * `parallel.py` Create distilled and contrastive cross-lingual sentence embeddings only on parallel data.
+* `ensemble.py` Ensemble SentSim with XMoverScore + ContrastScore.
