@@ -54,3 +54,5 @@ print(*remap_tests(alignment="awesome", data="parallel-align", mapping="UMD"), s
 print(*remap_tests(alignment="awesome", data="parallel-align", mapping="CLP"), sep="\n")
 print(*remap_tests(alignment="fast", data="parallel-align", mapping="UMD"), sep="\n")
 print(*remap_tests(alignment="fast", data="parallel-align", mapping="CLP"), sep="\n")
+print(*remap_tests(alignment="awesome", data="monolingual-align", mapping="UMD", metric="wmd"), sep="\n")
+print(*remap_tests(alignment="awesome", data="monolingual-align", mapping="CLP", metric="wmd"), sep="\n")
