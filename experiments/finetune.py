@@ -50,8 +50,7 @@ def self_learning_tests(source_lang, target_lang, max_len=30, size=30000):
     xmover.mapping = "CLP"
     xmover.remap(para_src, para_tgt, suffix=suffix.replace("UMD", "CLP") + f"-finetuned-{size}", aligned=True, overwrite=False)
     logging.info(f"NMT training on parallel data.")
-    xmover.train(para_src, para_tgt, suffix=suffix + f"-finetuned-{size}", iteration=iteration, aligned=True,
-            finetune=True, overwrite=False, k=1)
+    xmover.train(para_src, para_tgt, suffix=suffix + f"-finetuned-{size}", aligned=True, finetune=True, overwrite=False, k=1)
 
     pearson, spearman = xmover.correlation(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
