@@ -26,7 +26,7 @@ from random import Random
 class DatasetLoader():
     def __init__(self, source_language, target_language,
             min_monolingual_sent_len=3, max_monolingual_sent_len=30,
-            hard_limit=1000):
+            hard_limit=1000, return_references=False):
         """
         Initialize a dataloader for a given source and target language.
 
@@ -45,6 +45,7 @@ class DatasetLoader():
         self.min_monolingual_sent_len = min_monolingual_sent_len
         self.max_monolingual_sent_len = max_monolingual_sent_len
         self.hard_limit = hard_limit
+        self.return_reference = return_references
 
     @property
     def monolingual_data(self):
@@ -92,6 +93,7 @@ class DatasetLoader():
             "samples": 560,
             "members": (
                 f"DAseg-wmt-newstest2016/DAseg.newstest2016.source.{self.source_lang}-{self.target_lang}",
+                f"DAseg-wmt-newstest2016/DAseg.newstest2016.reference.{self.source_lang}-{self.target_lang}",
                 f"DAseg-wmt-newstest2016/DAseg.newstest2016.mt-system.{self.source_lang}-{self.target_lang}",
                 f"DAseg-wmt-newstest2016/DAseg.newstest2016.human.{self.source_lang}-{self.target_lang}",
             )
@@ -342,7 +344,7 @@ class DatasetLoader():
         return mono_source, mono_target
 
     def load_scored(self, name):
-        eval_source, eval_system, eval_scores = list(), list(), list()
+        eval_source, eval_reference, eval_system, eval_scores = list(), list(), list(), list()
         if name.endswith("mlqe"):
             self.download(self.mlqe_eval_data)
             samples, member = self.mlqe_eval_data["samples"], self.mlqe_eval_data["member"]
@@ -356,7 +358,7 @@ class DatasetLoader():
             self.download(self.wmt17_eval_data)
             wmt_submitted, wmt_metrics = [join(DATADIR, name) for name in self.wmt17_eval_data["filenames"]]
             with topen(wmt_submitted, 'r:gz') as tf:
-                members = [join('wmt17-submitted-data/txt', folder) for folder in ["sources", "system-outputs"]]
+                members = [join('wmt17-submitted-data/txt', folder) for folder in ["sources", "references", "system-outputs"]]
                 tf.extractall(DATADIR, [tarinfo for tarinfo in tf.getmembers() if tarinfo.name.startswith(tuple(members))])
             with topen(wmt_metrics, 'r:gz') as tf:
                 tf.extract("./manual-evaluation/DA-seglevel.csv", DATADIR)
@@ -379,9 +381,11 @@ class DatasetLoader():
                     if src == self.source_lang and tgt == self.target_lang:
                         path = join(DATADIR, "wmt17-submitted-data/txt")
                         source_file = join(path, f"sources/newstest2017-{src}{tgt}-src.{src}")
+                        reference_file = join(path, f"references/newstest2017-{src}{tgt}-ref.{tgt}")
                         hyp_template = join(path, f"system-outputs/newstest2017/{src}-{tgt}/newstest2017.{{}}.{src}-{tgt}")
 
                         source = getline(source_file, index).strip()
+                        reference = getline(reference_file, index).strip()
                         hypotheses = list()
                         for system in systems:
                             hyp_file = hyp_template.format(system)
@@ -391,6 +395,7 @@ class DatasetLoader():
                         assert min(len(source), len(hypotheses[0])) > 0 and len(set(hypotheses)) == 1
 
                         eval_source.append(source)
+                        eval_reference.append(reference)
                         eval_system.append(hypotheses[0])
                         eval_scores.append(score)
                 assert len(eval_scores) == len(eval_system) == len(eval_scores) == self.wmt17_eval_data['samples']
@@ -398,7 +403,7 @@ class DatasetLoader():
             self.download(self.mqm_eval_data)
             wmt_submitted, mqm_file = [join(DATADIR, name) for name in self.mqm_eval_data["filenames"]]
             with topen(wmt_submitted, 'r:gz') as tf:
-                members = [join('txt', folder) for folder in ["sources", "system-outputs"]]
+                members = [join('txt', folder) for folder in ["sources", "references", "system-outputs"]]
                 tf.extractall(DATADIR, [tarinfo for tarinfo in tf.getmembers() if tarinfo.name.startswith(tuple(members))])
             with open(mqm_file, "rb") as f:
                 for line in f.readlines()[1:]:
@@ -406,12 +411,15 @@ class DatasetLoader():
                     seg_id, src, tgt = int(seg_id), self.source_lang, self.target_lang
 
                     source_file = join(DATADIR, f"txt/sources/newstest2020-{src}{tgt}-src.{src}.txt")
+                    reference_file = join(DATADIR, f"txt/references/newstest2020-{src}{tgt}-ref.{tgt}.txt")
                     hyp_file = join(DATADIR, f"txt/system-outputs/{src}-{tgt}/newstest2020.{src}-{tgt}.{system}.txt")
                     source = getline(source_file, seg_id).strip()
+                    reference = getline(reference_file, seg_id).strip()
                     hypothesis = getline(hyp_file, seg_id).strip()
 
                     assert source and hypothesis
                     eval_source.append(source)
+                    eval_reference.append(reference)
                     eval_system.append(hypothesis)
                     eval_scores.append(float(mqm_avg_score))
                 assert len(eval_scores) == len(eval_system) == len(eval_scores) == self.mqm_eval_data['samples']
@@ -430,11 +438,16 @@ class DatasetLoader():
             self.download(self.wmt16_eval_data)
             samples, members = self.wmt16_eval_data["samples"], self.wmt16_eval_data["members"]
             with topen(join(DATADIR, self.wmt16_eval_data["filename"]), 'r:gz') as tf:
-                for src, mt, score in zip(*map(lambda x: islice(tf.extractfile(x), samples), members)):
+                for src, ref, mt, score in zip(*map(lambda x: islice(tf.extractfile(x), samples), members)):
                     eval_source.append(src.decode().strip())
+                    eval_reference.append(ref.decode().strip())
                     eval_system.append(mt.decode().strip())
                     eval_scores.append(float(score.decode()))
-        return eval_source, eval_system, eval_scores
+
+        if self.return_reference and len(eval_reference) > 0:
+            return eval_source, eval_reference, eval_system, eval_scores
+        else:
+            return eval_source, eval_system, eval_scores
 
     def load(self, name, count=None): # in a refactor it would make sense to allow this for all datasets
         if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix", "nepali", "ccmatrix"]:
