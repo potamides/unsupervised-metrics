@@ -10,6 +10,7 @@ convenience.
 
 <details><summary>Implemented Papers</summary><p>
 
+  * [UScore: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation](https://arxiv.org/abs/2202.10062)
   * Self-Learning for Unsupervised Evaluation Metrics
   * [On the Limitations of Cross-lingual Encoders as Exposed by Reference-Free Machine Translation Evaluation](https://aclanthology.org/2020.acl-main.151)
   * [SentSim: Crosslingual Semantic Evaluation of Machine Translation](https://aclanthology.org/2021.naacl-main.252)
@@ -21,8 +22,9 @@ package with [pip](https://pip.pypa.io/en/stable):
 ```sh
 pip install 'git+https://github.com/potamides/unsupervised-metrics.git#egg=metrics'
 ```
-If your goal is to run the included [experiments](experiments) clone the
-repository and install it in editable mode:
+If your goal is to run the included [experiments](experiments) (e.g. to
+replicate the results of UScore) clone the repository and install it in
+editable mode:
  ```sh
  git clone https://github.com/potamides/unsupervised-metrics
  pip install -e unsupervised-metrics

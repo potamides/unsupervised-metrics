@@ -1,10 +1,12 @@
 # Experiments
 This directory contains experiments which were conducted during the
-master-thesis *Self-Learning for Unsupervised Evaluation Metrics*. By default
-the experiments train the used models from scratch, since it is difficult to
-distribute all created model files due to storage limitations. If you need the
-original model files due to reproducability reasons, please contact the
-maintainers of this repository. Created files are cached in
+master-thesis *Self-Learning for Unsupervised Evaluation Metrics* and published
+in the paper *UScore: An Effective Approach to Fully Unsupervised Evaluation
+Metrics for Machine Translation*. By default the experiments train the used
+models from scratch, since it is difficult to distribute all created model
+files due to storage limitations. If you need the original model files due to
+reproducability reasons, please contact the maintainers of this repository.
+Created files are cached in
 `${METRICS_HOME:-${XDG_CACHE_HOME:-~/.cache}/metrics}`, so training and
 pre-processing only happens once. Please be careful when interrupting a running
 process, as created files are not yet checked for their integrity.
@@ -16,6 +18,10 @@ case out-of-memory errors are to be expected. Model inference is of course less
 resource intensive.
 
 ## Included Experiments
+When coming from UScore, the `self_learning_tests` in `comparison.py` contain
+most of the experiments present in the paper. Please note that the names used
+for the metrics are slightly different from the ones used in the paper.
+
 * `remap.py` Remap XMoverScore on pseudo-parallel sentences.
 * `quantity.py` Remap XMoverScore on pseudo-parallel sentences mined from different amounts of monolingual data.
 * `vecmap.py` Use XMoverScore and mean-pooling metrics with [VecMap](https://github.com/artetxem/vecmap) embeddings.
