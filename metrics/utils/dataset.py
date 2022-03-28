@@ -11,7 +11,7 @@ from urllib.error import URLError
 from io import TextIOWrapper
 from tqdm import tqdm
 from logging import warn
-from re import search
+from re import search, fullmatch
 from pickle import load, dump
 from gdown import cached_download
 from zipfile import ZipFile
@@ -343,17 +343,17 @@ class DatasetLoader():
                 dump((mono_source, mono_target), f)
         return mono_source, mono_target
 
-    def load_scored(self, name):
+    def load_scored(self, name, use_mlqe_model_scores):
         eval_source, eval_reference, eval_system, eval_scores = list(), list(), list(), list()
         if name.endswith("mlqe"):
             self.download(self.mlqe_eval_data)
             samples, member = self.mlqe_eval_data["samples"], self.mlqe_eval_data["member"]
             with topen(join(DATADIR, self.mlqe_eval_data["filename"]), 'r:gz') as tf:
                 tsvdata = reader(TextIOWrapper(tf.extractfile(member)), delimiter="\t", quoting=QUOTE_NONE)
-                for _, src, mt, *_, score, _ in islice(tsvdata, 1, samples + 1):
+                for _, src, mt, *_, human, model in islice(tsvdata, 1, samples + 1):
                     eval_source.append(src.strip())
                     eval_system.append(mt.strip())
-                    eval_scores.append(float(score))
+                    eval_scores.append(float(model if use_mlqe_model_scores else human))
         elif name.endswith("wmt17"):
             self.download(self.wmt17_eval_data)
             wmt_submitted, wmt_metrics = [join(DATADIR, name) for name in self.wmt17_eval_data["filenames"]]
@@ -375,8 +375,11 @@ class DatasetLoader():
                             continue
                         else:
                             systems.remove("ROCMT.5167")
-                    if "CASICT-cons.5144" in systems: # there seem to be some typos for zh-en
-                        systems[systems.index("CASICT-cons.5144")] = "CASICT-DCU-NMT.5144"
+
+                    for system in systems:
+                        match = fullmatch(r"CASICT-cons\.(\d{4})", system)
+                        if match: # there seem to be some typos for zh-en/en-zh
+                            systems[systems.index(system)] = f"CASICT-DCU-NMT.{match.group(1)}"
 
                     if src == self.source_lang and tgt == self.target_lang:
                         path = join(DATADIR, "wmt17-submitted-data/txt")
@@ -449,12 +452,12 @@ class DatasetLoader():
         else:
             return eval_source, eval_system, eval_scores
 
-    def load(self, name, count=None): # in a refactor it would make sense to allow this for all datasets
+    def load(self, name, count=None, use_mlqe_model_scores=False): # in a refactor it would make sense to allow this for all datasets
         if name in ["parallel", "parallel-align", "parallel-train", "wikimatrix", "nepali", "ccmatrix"]:
             return self.load_parallel(name, count)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name, count)
         elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-eval4nlp"]:
-            return self.load_scored(name)
+            return self.load_scored(name, use_mlqe_model_scores)
         else:
             raise ValueError(f"{name} is not a valid type!")

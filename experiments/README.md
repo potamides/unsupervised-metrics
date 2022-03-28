@@ -34,3 +34,4 @@ for the metrics are slightly different from the ones used in the paper.
 * `finetune.py` Finetune induced self-learned metrics on small parallel corpora.
 * `parallel.py` Create distilled and contrastive cross-lingual sentence embeddings only on parallel data.
 * `ensemble.py` Ensemble SentSim with XMoverScore + ContrastScore.
+* `sentsim.py` Try to reproduce scores of SentSim metrics.
