@@ -46,8 +46,8 @@ def sentsim_reproduce(
 
     pearson, spearman = scorer.correlation(eval_src, eval_system, eval_scores)
     logging.info(f"Pearson: {pearson}, Spearman: {spearman}")
-    results["pearson"].append(round(100 * pearson, 1))
-    results["spearman"].append(round(100 * spearman, 1))
+    results["pearson"].append(round(100 * pearson, 2))
+    results["spearman"].append(round(100 * spearman, 2))
 
     return tabulate(results, headers="keys", showindex=index)
 
