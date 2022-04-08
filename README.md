@@ -27,7 +27,7 @@ replicate the results of UScore) clone the repository and install it in
 editable mode:
  ```sh
  git clone https://github.com/potamides/unsupervised-metrics
- pip install -e unsupervised-metrics
+ pip install -e unsupervised-metrics[experiments]
  ```
 If you want to use [fast-align](https://github.com/clab/fast_align) follow its
 install instruction and make sure that the `fast_align` and `atools` programs

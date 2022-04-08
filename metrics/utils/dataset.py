@@ -1,28 +1,33 @@
 #!/usr/bin/env python
-from csv import reader, QUOTE_NONE
-from itertools import islice
-from os import makedirs
-from os.path import isfile, join, dirname
+from csv import QUOTE_NONE, reader
 from gzip import open as gopen
-from lzma import open as xopen
-from tarfile import open as topen
-from urllib.request import urlretrieve, urlopen
-from urllib.error import URLError
 from io import TextIOWrapper
-from tqdm import tqdm
-from logging import warn
-from re import search, fullmatch
-from pickle import load, dump
-from gdown import cached_download
-from zipfile import ZipFile
+from itertools import islice
 from linecache import getline
-from .language import LangDetect, WordTokenizer, SentenceSplitter
-from .env import DATADIR
-from numpy import nan, nanmean, nanstd, empty
+from logging import warn
+from lzma import open as xopen
+from os import makedirs
+from os.path import basename, dirname, isfile, join, splitext
+from pickle import dump, load
 from random import Random
+from re import fullmatch, search
+from tarfile import open as topen
+from urllib.error import URLError
+from urllib.request import urlopen, urlretrieve
+from zipfile import ZipFile
 
-# If I ever manage to refactor this abomination, the easiest way would
-# probably to reimplement it as huggingface datasets.
+from gdown import cached_download
+from numpy import empty, nan, nanmean, nanstd
+from tqdm import tqdm
+from mt_metrics_eval import data
+
+from .env import DATADIR
+from .language import LangDetect, SentenceSplitter, WordTokenizer
+
+# Implementing all datasets in a single class was the worst idea ever. If I
+# ever manage to refactor this abomination, the easiest way would probably to
+# reimplement it as huggingface datasets. Sorry to anyone who has to go through
+# this.
 class DatasetLoader():
     def __init__(self, source_language, target_language,
             min_monolingual_sent_len=3, max_monolingual_sent_len=30,
@@ -45,7 +50,7 @@ class DatasetLoader():
         self.min_monolingual_sent_len = min_monolingual_sent_len
         self.max_monolingual_sent_len = max_monolingual_sent_len
         self.hard_limit = hard_limit
-        self.return_reference = return_references
+        self.return_references = return_references
 
     @property
     def monolingual_data(self):
@@ -58,7 +63,17 @@ class DatasetLoader():
                 f"http://data.statmt.org/news-crawl/{self.source_lang}",
                 f"http://data.statmt.org/news-crawl/{self.target_lang}"
             ),
-            "fallback": {
+            "fallback-cc-mono": {
+                "filenames": (
+                    (f"{self.source_lang}.txt.xz", f"cc-mono-{self.source_lang}.txt.xz"),
+                    (f"{self.target_lang}.txt.xz", f"cc-mono-{self.target_lang}.txt.xz")
+                ),
+                "urls": (
+                    "https://data.statmt.org/wmt21/translation-task/cc-mono",
+                    "https://data.statmt.org/wmt21/translation-task/cc-mono"
+                )
+            },
+            "fallback-cc100": {
                 "filenames": (
                     f"{self.source_lang}.txt.xz",
                     f"{self.target_lang}.txt.xz"
@@ -131,6 +146,12 @@ class DatasetLoader():
                 f"https://github.com/google/wmt-mqm-human-evaluation/raw/main/{self.source_lang+self.target_lang}"
             ),
             "samples": 20000 if self.source_lang == "zh" else 14180,
+        }
+    @property
+    def wmt21_eval_data(self):
+        return {
+            "filename": basename(data.TGZ),
+            "url": dirname(data.TGZ)
         }
     @property
     def wikimatrix_data(self):
@@ -209,7 +230,7 @@ class DatasetLoader():
         return (scores - nanmean(scores, 0)) / nanstd(scores, 0)
 
     def cc100_iter(self, language):
-        filename, lines = self.monolingual_data["fallback"]["filenames"][0 if language == self.source_lang else 1], list()
+        filename, lines = self.monolingual_data["fallback-cc100"]["filenames"][0 if language == self.source_lang else 1], list()
         with xopen(join(DATADIR, filename)) as f, SentenceSplitter(language) as sent_split:
             for line in map(lambda line: line.strip(), f):
                 if len(line) == 0:
@@ -223,9 +244,14 @@ class DatasetLoader():
         langdetect = LangDetect(cache_dir=DATADIR)
         with WordTokenizer(lang) as tokenize, SentenceSplitter(lang) as sent_split:
             for sent in map(lambda sent: sent.strip(), iterator):
+                try:
+                    sent = sent.decode()
+                except AttributeError:
+                    pass
+                # xhosa (xh) and zulu (zu) are not supported by fasttext language detection
                 if len(sents) < size and all(not search(pattern, sent) for pattern in exclude) \
-                and len(sent_split([sent])) == 1 and langdetect.detect(sent) == lang and len(sent) <= self.hard_limit \
-                and self.min_monolingual_sent_len <= len(tokenize(sent)) <= self.max_monolingual_sent_len:
+                and len(sent_split([sent])) == 1 and (lang in ["xh", "zu"] or langdetect.detect(sent) == lang) \
+                and len(sent) <= self.hard_limit and self.min_monolingual_sent_len <= len(tokenize(sent)) <= self.max_monolingual_sent_len:
                     sents.add(sent)
         return sents
 
@@ -319,19 +345,32 @@ class DatasetLoader():
                     mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
                     mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
             elif version == self.monolingual_data["versions"][-1]:
-                data = self.monolingual_data["fallback"]
                 if isfile(join(mpath, mfiles[0])):
                     with gopen(join(mpath, mfiles[0]), "rt") as f:
                         mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
                 else:
+                    data = self.monolingual_data["fallback-cc-mono"]
                     self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
-                    mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
+                    if isfile(join(mpath, data["filenames"][0][1])):
+                        with xopen(join(DATADIR, data["filenames"][0][1])) as f:
+                            mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+                    else:
+                        data = self.monolingual_data["fallback-cc100"]
+                        self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
+                        mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
                 if isfile(join(mpath, mfiles[1])):
                     with gopen(join(mpath, mfiles[1]), "rt") as g:
                         mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
                 else:
+                    data = self.monolingual_data["fallback-cc-mono"]
                     self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
-                    mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
+                    if isfile(join(mpath, data["filenames"][1][1])):
+                        with xopen(join(DATADIR, data["filenames"][1][1])) as g:
+                            mono_target = self.filter(self.source_lang, mono_target, g, samples, patterns)
+                    else:
+                        data = self.monolingual_data["fallback-cc100"]
+                        self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
+                        mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
             if min(len(mono_source), len(mono_target)) >= samples:
                 break
         else:
@@ -437,6 +476,22 @@ class DatasetLoader():
                     scores[idx] = [self.nanfloat(score1), self.nanfloat(score2), self.nanfloat(score3), self.nanfloat(score4)]
 
                 return sources, targets, nanmean(self.zscore(scores), 1).tolist()
+        elif name.endswith("wmt21.flores"):
+            data.LocalDir = lambda root_only=True: DATADIR if root_only else join(DATADIR, splitext(self.wmt21_eval_data["filename"])[0])
+            self.download(self.wmt21_eval_data)
+            extracted = join(DATADIR, self.wmt21_eval_data["filename"])
+            if not isfile(extracted):
+                with topen(extracted, 'r:gz') as tar:
+                    tar.extractall(DATADIR)
+            evs = data.EvalSet('wmt21.flores', f"{self.source_lang}-{self.target_lang}")
+            src, ref, sys, scores = evs.src, evs.all_refs["ref-A"], evs.sys_outputs, evs.Scores("seg", "wmt-z")
+            for system, scores in scores.items():
+                for idx, score in enumerate(scores):
+                    if score != None:
+                        eval_source.append(src[idx])
+                        eval_reference.append(ref[idx])
+                        eval_system.append(sys[system][idx])
+                        eval_scores.append(score)
         else:
             self.download(self.wmt16_eval_data)
             samples, members = self.wmt16_eval_data["samples"], self.wmt16_eval_data["members"]
@@ -447,7 +502,7 @@ class DatasetLoader():
                     eval_system.append(mt.decode().strip())
                     eval_scores.append(float(score.decode()))
 
-        if self.return_reference and len(eval_reference) > 0:
+        if self.return_references and len(eval_reference) > 0:
             return eval_source, eval_reference, eval_system, eval_scores
         else:
             return eval_source, eval_system, eval_scores
@@ -457,7 +512,7 @@ class DatasetLoader():
             return self.load_parallel(name, count)
         elif name in ["monolingual-align", "monolingual-train"]:
             return self.load_monolingual(name, count)
-        elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-eval4nlp"]:
+        elif name in ["scored", "scored-mlqe", "scored-wmt17", "scored-mqm", "scored-wmt21.flores", "scored-eval4nlp"]:
             return self.load_scored(name, use_mlqe_model_scores)
         else:
             raise ValueError(f"{name} is not a valid type!")

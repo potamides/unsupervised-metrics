@@ -18,7 +18,7 @@ case out-of-memory errors are to be expected. Model inference is of course less
 resource intensive.
 
 ## Included Experiments
-When coming from UScore, the `self_learning_tests` in `comparison.py` contain
+When coming from UScore, the `uscore_tests` in `comparison.py` contain
 most of the experiments present in the paper. Please note that the names used
 for the metrics are slightly different from the ones used in the paper.
 

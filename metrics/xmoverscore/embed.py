@@ -117,7 +117,7 @@ class BertRemapPretrained(BertEmbed):
     url = f"https://github.com/potamides/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
     def remap(self, source_lang, target_lang):
-        for corpus in ["europarl-v7", "flores-v1", "un-v1", "wikimedia-v20210402"]:
+        for corpus in ["europarl-v7", "flores-v1", "un-v1", "wikimedia-v20210402", "wikimatrix-v1", "multi-cc-aligned-v1.1"]:
             try:
                 if self.mapping == "CLP":
                     download = urlopen(self.url.format(corpus, source_lang, target_lang, "BAM")).read()

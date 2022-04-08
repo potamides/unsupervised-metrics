@@ -39,14 +39,16 @@ class LangDetect():
 
 class WordTokenizer():
     def __init__(self, language):
-        if language in ["si"]:
+        if language == "si":
             self.tokenize = SinhalaTokenizer().tokenize
-        elif language == "ne":
+        # since bn and hi are related to ne and use the same script we can use the ne tokenizer for all
+        elif language in ["ne", "bn", "hi"]:
             self.tokenize = Tokenizer().word_tokenize
         elif language == "zh":
             self.tokenize = lambda sent: list(cut(sent))
         else:
-            self.tokenize = MosesTokenizer(language)
+            # zulu and xhosa follow english punctuation
+            self.tokenize = MosesTokenizer("en" if language in ["zu", "xh"] else language)
 
     def __call__(self, sentence):
         return self.tokenize(sentence)
@@ -66,12 +68,12 @@ class SentenceSplitter():
     def __init__(self, language):
         if language in ["si"]:
             self.split = lambda sents: SinhalaTokenizer().split_sentences(" ".join(sents))
-        elif language == "ne":
+        elif language in ["ne", "bn", "hi"]:
             self.split = lambda sents: Tokenizer().sentence_tokenize(" ".join(sents))
         elif language == "zh":
             self.split = lambda sent: self._split_chinese(sent)
         else:
-            self.split = MosesSentenceSplitter(language, False)
+            self.split = MosesSentenceSplitter("en" if language in ["zu", "xh"] else language, False)
 
     # taken from https://stackoverflow.com/a/45274695, modified regex of
     # http://aclweb.org/anthology/Y/Y11/Y11-1038.pdf

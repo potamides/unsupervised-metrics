@@ -1,12 +1,20 @@
 from setuptools import setup, find_namespace_packages
 
-setup(name='unsupervised-metrics',
-    version='1.0',
-    description='Self-Learning for Unsupervised Metrics',
-    keywords = ["Unsupervised", "Metrics", "Quality Estimation", "Machine Translation", "NLP", "Deep Learning"],
-    url='https://github.com/potamides/unsupervised-metrics',
-    author='Jonas Belouadi',
-    author_email='potamides@posteo.net',
+setup(
+    name="unsupervised-metrics",
+    version="1.0",
+    description="Self-Learning for Unsupervised Metrics",
+    keywords=[
+        "Unsupervised",
+        "Metrics",
+        "Quality Estimation",
+        "Machine Translation",
+        "NLP",
+        "Deep Learning",
+    ],
+    url="https://github.com/potamides/unsupervised-metrics",
+    author="Jonas Belouadi",
+    author_email="potamides@posteo.net",
     packages=find_namespace_packages(include=["metrics*"]),
     install_requires=[
         "tqdm==4.49.0",
@@ -24,13 +32,19 @@ setup(name='unsupervised-metrics',
         "sinling==0.3.6",
         "Nepali_nlp @ https://github.com/potamides/Nepali_nlp/archive/d3d078ed50c8224f290d772f7b895354d0cb0266.zip",
         "simalign @ https://github.com/cisnlp/simalign/archive/refs/tags/v0.2.zip",
+        "mt_metrics_eval @ https://github.com/google-research/mt-metrics-eval/archive/refs/heads/main.zip",
         "PuLP==2.4",
         "bert-score==0.3.9",
         "tabulate==0.8.9",
-        "gdown==3.13.0"
+        "gdown==3.13.0",
     ],
     extras_require={
         "vecmap-cuda": ["cupy"],
+        "experiments": [
+            "unbabel-comet",
+            "transquest",
+            "sacrebleu",
+        ],
     },
     python_requires=">=3.9.0",
     zip_safe=False,
