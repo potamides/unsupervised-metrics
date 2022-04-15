@@ -69,10 +69,10 @@ class BertRemap(BertEmbed):
         self.remap_size = remap_size
         self.alignment = alignment
 
-    def remap(self, source_sents, target_sents, suffix="tensor", aligned=False, overwrite=True):
-        file_path = join(DATADIR, f"projection-{suffix}.pt")
+    def remap(self, source_sents, target_sents, suffix="tensor", aligned=False, overwrite=True, new_mapping=None):
+        file_path, mapping = join(DATADIR, f"projection-{suffix}.pt"), new_mapping or self.mapping
         if not isfile(file_path) or overwrite:
-            logging.info(f'Computing projection tensor for {self.mapping} remapping method.')
+            logging.info(f'Computing projection tensor for {mapping} remapping method.')
             sorted_sent_pairs = list()
             if aligned:
                 sorted_sent_pairs.extend(zip(source_sents, target_sents))
@@ -93,19 +93,21 @@ class BertRemap(BertEmbed):
                             self.model, self.tokenizer, self.embed_batch_size, self.device, 8)
                     tokenized_pairs, align_pairs = awesome_align(sorted_sent_pairs, self.model, self.tokenizer,
                             self.remap_size, self.device,
-                            clp(src_matrix, tgt_matrix) if self.mapping == "CLP" else umd(src_matrix, tgt_matrix))
+                            clp(src_matrix, tgt_matrix) if mapping == "CLP" else umd(src_matrix, tgt_matrix))
             src_matrix, tgt_matrix = get_aligned_features_avgbpe(tokenized_pairs, align_pairs,
                     self.model, self.tokenizer, self.embed_batch_size, self.device)
 
             logging.info(f"Using {len(src_matrix)} aligned word pairs to compute projection tensor.")
-            if self.mapping == "CLP":
+            if mapping == "CLP":
                 self.projection = clp(src_matrix, tgt_matrix)
             else:
                 self.projection = umd(src_matrix, tgt_matrix)
             torch.save(self.projection, file_path)
         else:
-            logging.info(f'Loading {self.mapping} projection tensor from disk.')
+            logging.info(f'Loading {mapping} projection tensor from disk.')
             self.projection = torch.load(file_path)
+        if new_mapping:
+            self.mapping = new_mapping
 
 class BertRemapPretrained(BertEmbed):
     """
