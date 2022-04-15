@@ -344,36 +344,48 @@ class DatasetLoader():
                 with gopen(join(mpath, mfiles[0]), "rt") as f, gopen(join(mpath, mfiles[1]), "rt") as g:
                     mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
                     mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
-            elif version == self.monolingual_data["versions"][-1]:
-                if isfile(join(mpath, mfiles[0])):
-                    with gopen(join(mpath, mfiles[0]), "rt") as f:
-                        mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
-                else:
-                    data = self.monolingual_data["fallback-cc-mono"]
-                    self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
-                    if isfile(join(mpath, data["filenames"][0][1])):
-                        with xopen(join(DATADIR, data["filenames"][0][1])) as f:
-                            mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
-                    else:
-                        data = self.monolingual_data["fallback-cc100"]
-                        self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
-                        mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
-                if isfile(join(mpath, mfiles[1])):
-                    with gopen(join(mpath, mfiles[1]), "rt") as g:
-                        mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
-                else:
-                    data = self.monolingual_data["fallback-cc-mono"]
-                    self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
-                    if isfile(join(mpath, data["filenames"][1][1])):
-                        with xopen(join(DATADIR, data["filenames"][1][1])) as g:
-                            mono_target = self.filter(self.source_lang, mono_target, g, samples, patterns)
-                    else:
-                        data = self.monolingual_data["fallback-cc100"]
-                        self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
-                        mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
             if min(len(mono_source), len(mono_target)) >= samples:
                 break
         else:
+            mfiles = [filename.format(self.monolingual_data["versions"][-1]) for filename in self.monolingual_data["filenames"]]
+            # source
+            if len(mono_source) < samples:
+                if isfile(join(DATADIR, mfiles[0])):
+                    with gopen(join(DATADIR, mfiles[0]), "rt") as f:
+                        mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+
+            if len(mono_source) < samples:
+                data = self.monolingual_data["fallback-cc-mono"]
+                self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
+                if isfile(join(DATADIR, data["filenames"][0][1])):
+                    with xopen(join(DATADIR, data["filenames"][0][1])) as f:
+                        mono_source = self.filter(self.source_lang, mono_source, f, samples, patterns)
+
+            if len(mono_source) < samples:
+                data = self.monolingual_data["fallback-cc100"]
+                self.download({"filename": data["filenames"][0], "url": data["urls"][0]})
+                if isfile(join(DATADIR, data["filenames"][0])):
+                    mono_source = self.filter(self.source_lang, mono_source, self.cc100_iter(self.source_lang), samples, patterns)
+
+            # target
+            if len(mono_target) < samples:
+                if isfile(join(DATADIR, mfiles[1])):
+                    with gopen(join(DATADIR, mfiles[1]), "rt") as g:
+                        mono_target = self.filter(self.target_lang, mono_target, g, samples, patterns)
+
+            if len(mono_target) < samples:
+                data = self.monolingual_data["fallback-cc-mono"]
+                self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
+                if isfile(join(DATADIR, data["filenames"][1][1])):
+                    with xopen(join(DATADIR, data["filenames"][1][1])) as g:
+                        mono_target = self.filter(self.source_lang, mono_target, g, samples, patterns)
+
+            if len(mono_target) < samples:
+                data = self.monolingual_data["fallback-cc100"]
+                self.download({"filename": data["filenames"][1], "url": data["urls"][1]})
+                if isfile(join(DATADIR, data["filenames"][1])):
+                    mono_target = self.filter(self.target_lang, mono_target, self.cc100_iter(self.target_lang), samples, patterns)
+
             if min(len(mono_source), len(mono_target)) < samples:
                 warn(f"Only obtained {len(mono_source)} source sentences and {len(mono_target)} target sentences.")
         mono_source, mono_target = list(mono_source), list(mono_target)

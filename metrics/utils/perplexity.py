@@ -2,6 +2,9 @@ from transformers import AutoModelWithLMHead, AutoTokenizer
 from torch import tensor
 
 def lm_perplexity(hyps, device, name="gpt2"):
+    if name is None:
+        return [0] * len(hyps)
+
     # Some models need a special tokenizer, like chinese gpt2, see here:
     # https://huggingface.co/ckiplab/gpt2-base-chinese
     model_name, tokenizer_name = (name, name) if isinstance(name, str) else name

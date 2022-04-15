@@ -33,6 +33,8 @@ from transformers import (
     HfArgumentParser,
     MBartTokenizer,
     MBartTokenizerFast,
+    MBart50Tokenizer,
+    MBart50TokenizerFast,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
     default_data_collator,
@@ -53,6 +55,14 @@ language2mBART = {
     "it": "it_IT", "ja": "ja_XX", "kk": "kk_KZ", "ko": "ko_KR", "lt": "lt_LT",
     "lv": "lv_LV", "my": "my_MM", "ne": "ne_NP", "nl": "nl_XX", "ro": "ro_RO",
     "ru": "ru_RU", "si": "si_LK", "tr": "tr_TR", "vi": "vi_VN", "zh": "zh_CN" }
+
+language2mBART50 = language2mBART | {
+    "af": "af_ZA", "az": "az_AZ", "bn": "bn_IN", "fa": "fa_IR", "he": "he_IL",
+    "hr": "hr_HR", "id": "id_ID", "ka": "ka_GE", "km": "km_KH", "mk": "mk_MK",
+    "ml": "ml_IN", "mn": "mn_MN", "mr": "mr_IN", "pl": "pl_PL", "ps": "ps_AF",
+    "pt": "pt_XX", "sv": "sv_SE", "sw": "sw_KE", "ta": "ta_IN", "te": "te_IN",
+    "th": "th_TH", "tl": "tl_XX", "uk": "uk_UA", "ur": "ur_PK", "xh": "xh_ZA",
+    "gl": "gl_ES", "sl": "sl_SI", "zu": "xh_ZA"} # zulu and xhosa are related, so it should be fine
 
 @dataclass
 class ModelArguments:
@@ -176,9 +186,14 @@ def load_model_and_tokenizer(model_name_or_path, source_lang, target_lang, use_f
 
     # For translation we set the codes of our source and target languages (only useful for mBART, the others will
     # ignore those attributes).
-    if isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
+    if isinstance(tokenizer, (MBartTokenizer, MBart50Tokenizer, MBartTokenizerFast, MBart50TokenizerFast)):
         tokenizer.src_lang = source_lang
         tokenizer.tgt_lang = target_lang
+
+    # For multilingual translation model mBART-50 we need to force the target
+    # language token as the first generated token.
+    if isinstance(tokenizer, (MBart50Tokenizer, MBart50TokenizerFast)):
+        model.config.forced_bos_token_id = tokenizer.lang_code_to_id[target_lang]
 
     return model, tokenizer
 
@@ -308,8 +323,9 @@ def _train(args=None):
 
 def train(model, source_lang, target_lang, dataset, overwrite, suffix, name=None):
     if "mbart" in model:
-        source_lang = language2mBART[source_lang]
-        target_lang = language2mBART[target_lang]
+        lookup = language2mBART50 if "50" in model else language2mBART
+        source_lang = lookup[source_lang]
+        target_lang = lookup[target_lang]
     args = [
         "--model_name_or_path", model,
         "--cache_dir", os.path.join(DATADIR, "translation", name or os.path.basename(model), suffix, "cache"),
@@ -317,6 +333,7 @@ def train(model, source_lang, target_lang, dataset, overwrite, suffix, name=None
         "--source_lang", source_lang,
         "--target_lang", target_lang,
         "--train_file", dataset,
+        "--report_to", "none",
         "--save_strategy", "epoch",
         "--per_device_train_batch_size", "4", "--do_train"]
     if overwrite:

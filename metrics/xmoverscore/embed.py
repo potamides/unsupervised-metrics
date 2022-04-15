@@ -114,7 +114,7 @@ class BertRemapPretrained(BertEmbed):
     Obtains pretrained remapping matrices from original XMoverScore repository.
     """
 
-    commit = "732b65d03e1f703398486f83a2e5c5bbdb7753d7"
+    commit = "73ef48058f8e47e0d99434b7c75a9ceb6f253d94"
     path = "mapping/layer-12/{}.{}-{}.2k.12.{}"
     url = f"https://github.com/potamides/ACL20-Reference-Free-MT-Evaluation/raw/{commit}/{path}"
 
