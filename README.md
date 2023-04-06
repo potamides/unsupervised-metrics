@@ -98,3 +98,15 @@ This library is based on the following projects:
 * [Seq2Seq examples](https://github.com/huggingface/transformers/tree/v4.5.1/examples/seq2seq) of [transformers](https://github.com/huggingface/transformers)
 * [VecMap](https://github.com/artetxem/vecmap)
 * [CRISS](https://github.com/pytorch/fairseq/tree/master/examples/criss)
+
+## Citation
+If you like/use our work, please cite
+@inproceedings{belouadi2023uscore,
+    title = "",
+    author = "Jonas Belouadi and Steffen Eger",
+    booktitle = "EACL",
+    year = "2023",
+    publisher = "Association for Computational Linguistics",
+    url = "USCORE: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
+    note = "accepted"
+}
