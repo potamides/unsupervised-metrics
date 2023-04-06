@@ -101,12 +101,15 @@ This library is based on the following projects:
 
 ## Citation
 If you like/use our work, please cite
+
+``
 @inproceedings{belouadi2023uscore,
-    title = "",
+    title = "USCORE: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
     author = "Jonas Belouadi and Steffen Eger",
     booktitle = "EACL",
     year = "2023",
     publisher = "Association for Computational Linguistics",
-    url = "USCORE: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
+    url = "https://arxiv.org/abs/2202.10062",
     note = "accepted"
 }
+``
