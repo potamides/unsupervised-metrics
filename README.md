@@ -102,7 +102,7 @@ This library is based on the following projects:
 ## Citation
 If you like/use our work, please cite
 
-``
+```
 @inproceedings{belouadi2023uscore,
     title = "USCORE: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
     author = "Jonas Belouadi and Steffen Eger",
@@ -112,4 +112,4 @@ If you like/use our work, please cite
     url = "https://arxiv.org/abs/2202.10062",
     note = "accepted"
 }
-``
+```
