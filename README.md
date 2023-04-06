@@ -11,7 +11,6 @@ convenience.
 <details><summary>Implemented Papers</summary><p>
 
   * [UScore: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation](https://arxiv.org/abs/2202.10062)
-  <!-- * Self-Learning for Unsupervised Evaluation Metrics -->
   * [On the Limitations of Cross-lingual Encoders as Exposed by Reference-Free Machine Translation Evaluation](https://aclanthology.org/2020.acl-main.151)
   * [SentSim: Crosslingual Semantic Evaluation of Machine Translation](https://aclanthology.org/2021.naacl-main.252)
 </p></details>
