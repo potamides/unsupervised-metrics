@@ -99,16 +99,19 @@ This library is based on the following projects:
 * [CRISS](https://github.com/pytorch/fairseq/tree/master/examples/criss)
 
 ## Citation
-If you like/use our work, please cite
+If you like/use our work, please [cite](https://aclanthology.org/2023.eacl-main.27.bib) as follows:
 
 ```bibtex
-@inproceedings{belouadi2023uscore,
-    title = "USCORE: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
-    author = "Jonas Belouadi and Steffen Eger",
-    booktitle = "EACL",
+@inproceedings{belouadi-eger-2023-uscore,
+    title = "{US}core: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation",
+    author = "Belouadi, Jonas  and
+      Eger, Steffen",
+    booktitle = "Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics",
+    month = may,
     year = "2023",
+    address = "Dubrovnik, Croatia",
     publisher = "Association for Computational Linguistics",
-    url = "https://arxiv.org/abs/2202.10062",
-    note = "accepted"
+    url = "https://aclanthology.org/2023.eacl-main.27",
+    pages = "358--374",
 }
 ```
