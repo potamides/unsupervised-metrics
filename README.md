@@ -5,12 +5,12 @@ state-of-the-art evaluation metrics for machine translation. The focus hereby
 lies on reference-free, unsupervised metrics, which do not make use of parallel
 data in any way, however wrappers around some weakly-supervised metrics like
 [XMoverScore](https://aclanthology.org/2020.acl-main.151) and
-[SentSim](https://aclanthology.org/2021.naacl-main.252) are provided out of
+[SentSim](https://aclanthology.org/2021.naacl-main.252) are provided for
 convenience.
 
 <details><summary>Implemented Papers</summary><p>
 
-  * [UScore: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation](https://arxiv.org/abs/2202.10062)
+  * [UScore: An Effective Approach to Fully Unsupervised Evaluation Metrics for Machine Translation](https://aclanthology.org/2023.eacl-main.27/)
   * [On the Limitations of Cross-lingual Encoders as Exposed by Reference-Free Machine Translation Evaluation](https://aclanthology.org/2020.acl-main.151)
   * [SentSim: Crosslingual Semantic Evaluation of Machine Translation](https://aclanthology.org/2021.naacl-main.252)
 </p></details>
