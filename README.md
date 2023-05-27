@@ -1,4 +1,4 @@
-# Unsupervised Metrics
+# Unsupervised Metrics: UScore & Friends
 [Unsupervised-Metrics](https://github.com/potamides/unsupervised-metrics) is a
 Python library which allows researches and developers alike to experiment with
 state-of-the-art evaluation metrics for machine translation. The focus hereby
