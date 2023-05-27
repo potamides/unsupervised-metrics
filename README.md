@@ -1,9 +1,9 @@
 # Unsupervised Metrics: UScore & Friends
 [Unsupervised-Metrics](https://github.com/potamides/unsupervised-metrics) is a
-Python library which allows researches and developers alike to experiment with
+Python library which allows researchers and developers alike to experiment with
 state-of-the-art evaluation metrics for machine translation. The focus hereby
 lies on reference-free, unsupervised metrics, which do not make use of supervision (parallel
-data, references, human scores) in any way, however wrappers around some (weakly-)supervised metrics like
+data, references, human scores) in any way. However wrappers around some (weakly-)supervised metrics like
 [XMoverScore](https://aclanthology.org/2020.acl-main.151) and
 [SentSim](https://aclanthology.org/2021.naacl-main.252) are provided for
 convenience.
