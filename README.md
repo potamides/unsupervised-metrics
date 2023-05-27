@@ -34,7 +34,7 @@ are on your `PATH`. This requirement is optional.
 
 ## Usage
 
-### Train an exising metric
+### Train an existing metric
 One focus of this library is to make it easy to fine-tune existing
 state-of-the-art metrics for arbitrary language pairs and domains.
 A simple example is provided in the code block below. For more involved
